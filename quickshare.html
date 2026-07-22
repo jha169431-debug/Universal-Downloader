@@ -1,0 +1,1150 @@
+FINAL URL: https://quickshare.samsungcloud.com/8nfsX2gdD4Uu
+STATUS: 200
+CONTENT TYPE: text/html;charset=UTF-8
+============================================================
+<!DOCTYPE HTML>
+<html>
+<head>
+<title>Quick Share</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+<meta name="robots" content="noindex,nofollow,noimageindex">
+<meta name = "format-detection" content = "telephone=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, target-densitydpi=medium-dpi" />
+<meta property="og:title" content="Quick Share">
+<meta property="og:type" content="website">
+<meta property="og:image" content="https://quickshare.samsungcloud.com/ls/public/v1/links/1784660064382Lj5ndnS/contents/98135240853511f189387a644c0ca513?signature=KBNoHMgUK6vfyaIajYqss8v8IObbKY2LR_eDRbY0UEibBs3VxKedM058yqK79DTTkY5RHIbBrrP2SFUpvyxjhZlz_Y1CVtjhmBG7mRtWNjpM9EOnbvjoXWA0BuApdKab_37KWakQAleH2qqZbN_Q2A&storageType=file">
+<meta property="og:description" content="1 file (297.6 MB)">
+    <link rel="shortcut icon" type="image/x-icon" href="/resources/images/Webview_app_icon_quick_share_new.png" />
+
+<link rel="stylesheet" href="/resources/css/layout.css?ver=1784660455512">
+<link rel="preload" as="font" href="/resources/fonts/Roboto-Medium.woff">
+<script>
+    if(navigator.userAgent.toLocaleLowerCase().indexOf('trident') > -1 || navigator.userAgent.toLocaleLowerCase().indexOf('msie') > -1) {
+        window.location.href = "/error/notsupported";
+    };
+</script>
+<script type="text/javascript" src="/resources/js/jquery/jquery-2.2.0.min.js"></script>
+<script type="text/javascript" src="/resources/js/jquery/jquery.numeric.min.js"></script>
+<script type="text/javascript" src="/resources/js/jquery/cookie.min.js"></script>
+<script type="text/javascript" src="/resources/js/common/moment.min.js"></script>
+<script type="text/javascript" src="/resources/js/common/handlebars.min-latest.js"></script>
+<script type="text/javascript" src="/resources/js/common/handlebars.helper.js"></script>
+<script type="text/javascript" src="/resources/js/common/remoteshare.prototype.js?ver=20061701"></script>
+<script type="text/javascript" src="/resources/js/app/remoteshare.js?ver=20211115"></script>
+<script type="text/javascript" src="/resources/js/app/sharelink.js?ver=1784660455512"></script>
+<head>
+<script type="text/javascript">
+  //<!--
+  //<![CDATA[
+  var isAndroid = navigator.userAgent.includes("Android");
+  var isInAppBrowser = navigator.userAgent.includes("wv") || navigator.userAgent.includes("WebView");
+  var deviceInfo = {
+    uaModel: localStorage.getItem('uaModel'),
+    platformVersion: localStorage.getItem('platformVersion')
+  };
+
+  var isSamsungDevice = function (userAgent) {
+    return /SM-|GT-|SCH-|SGH-|SPH-|SHW-|SHV-|SCL|SC-|ISW|SCT|SCV|403SC|404SC|SCV34|LTV/i.test(userAgent);
+  }
+
+  var canOpenNativeApp = function () {
+    return (isSamsungDevice(deviceInfo.uaModel) && parseInt(deviceInfo.platformVersion, 10) >= 10) || (isAndroid && isInAppBrowser);
+  }
+
+  var canShowOpenInApp = function () {
+    return RemoteShare.SupportedWindows.isDesktop() || (isSamsungDevice(deviceInfo.uaModel) && parseInt(deviceInfo.platformVersion, 10) >= 10);
+  }
+
+  var initHeader = function () {
+    $('.photo').unwrap('a');
+    $('.sender').text('Quick Share');
+  }
+
+  var renderOpenInApp = function () {
+    if (canShowOpenInApp()) {
+      $('.open_in_app').text('Open in app');
+    } else {
+      $('.open_in_app').remove();
+    }
+  }
+
+  var resolveDeviceInfo = async function () {
+    if (!isAndroid || !navigator.userAgentData || !navigator.userAgentData.getHighEntropyValues) {
+      return deviceInfo;
+    }
+
+    try {
+      const ua = await navigator.userAgentData.getHighEntropyValues(["model", "platformVersion"]);
+      deviceInfo.uaModel = ua.model;
+      deviceInfo.platformVersion = ua.platformVersion;
+      localStorage.setItem('uaModel', ua.model);
+      localStorage.setItem('platformVersion', ua.platformVersion);
+    } catch (e) {
+      console.warn('Failed to resolve userAgentData', e);
+    }
+
+    return deviceInfo;
+  }
+
+  var openNativeApp = function () {
+    url = 'intent://contentsAppLink/?content_token={linkId}#Intent;scheme=LinkSharing;action=android.intent.action.VIEW;category=android.intent.category.BROWSABLE;package=com.samsung.android.app.sharelive;end';
+    RemoteShare.functions.recordOpenAppLog('linkshare', ShareLink.globals.contentsToken);
+    url = url.replace('{linkId}', ShareLink.globals.contentsToken);
+    url = url.slice(0, -3) + "S.browser_fallback_url=" + window.location.href.split('?')[0] + "?showUnsupportedMsg=true;end";
+    // window.location.href = url;
+    var pageHidden = false;
+
+    function onVisibilityChange () {
+      if(document.hidden || document.webkitHidden) {
+        pageHidden = true;
+      }
+    }
+
+    document.addEventListener('visibilitychange', onVisibilityChange, false);
+    document.addEventListener('webkitvisibilitychange', onVisibilityChange, false);
+    document.addEventListener('pageHide', () => { pageHidden = true; });
+
+    var now = Date.now();
+    window.location = url;
+
+    setTimeout(() => {
+      if(!pageHidden) {
+        console.warn('Deeplinking is failed');
+        $('.open_in_app').remove();
+      } 
+    }, 1500);
+
+  }
+
+  $(document).ready(function () {
+    initHeader();
+    resolveDeviceInfo().then(function () {
+      renderOpenInApp();
+
+      if (canOpenNativeApp() && isAndroid && isInAppBrowser) {
+        openNativeApp();
+      }
+    });
+
+    var options = {};
+    options.contextPath = '';
+    options.requestTime = '';
+    options.contentsToken = '1784660064382Lj5ndnS';
+    options.contentsTotalCnt = '1';
+    options.uploadCompleted = 'true';
+    options.forEvent = 'false';
+    options.linkUrl = 'https://quickshare.samsungcloud.com/8nfsX2gdD4Uu';
+    options.linkUrlVersion = 'V1'
+    options.selectMode = window.location.hash === '#selectionMode';
+    options.isSelectAllMode = sessionStorage.getItem('selectAllTriggered') == 'true';
+    options.selectItemsMsg = 'Select items';
+    options.selectItemsSingular = 'lenPlaceholder selected';
+    options.selectItemsPlural = 'lenPlaceholder selected';
+    options.sharedatacontents = JSON.parse('[{"hash":"dd690edc7ba909bfc095e798457cb874ab2d6ff1f63b980ed67cae5d725a8d14","original":"https://quickshare.samsungcloud.com/ls/public/v1/links/1784660064382Lj5ndnS/contents/cc6c0c31853511f1a5592a31bbcaeba7?signature=KBNoHMgUK6vfyaIajYqss8v8IObbKY2LR_eDRbY0UEibBs3VxKedM058yqK79DTTkY5RHIbBrrP2SFUpvyxjhZlz_Y1CVtjhmBG7mRtWNjpM9EOnbvjoXWA0BuApdKab_37KWakQAleH2qqZbN_Q2A&storageType=file","thumbnail":null,"contentsSequenceNo":1,"size":297580352,"name":"arm64_SystemWebView.apk","bigThumbnail":null,"contentType":"application/vnd.android.package-archive","extraAttribute":0,"fileTypeCategoryThumbnailPath":"/resources/images/file_type_icon/apk.svg","fileTypeThumbnailPath":"/resources/images/file_type_icon/apk_thumb.svg","formattedFileSize":"297.6 MB"}]');
+    options.imageResourcePath = '/resources/images';
+    ShareLink.list.functions.init(options);
+    var isFirefox = navigator.userAgent.toLocaleLowerCase().indexOf('firefox') > -1;
+    var isChrome = (navigator.userAgent.toLocaleLowerCase().indexOf('chrome') > -1 && !(navigator.userAgent.toLocaleLowerCase().indexOf('edg') > -1));
+
+    if (!/iPhone/.test(navigator.userAgent)) { // hide learn more link if not ios user
+      $('.learn-more').addClass('noDisplay');
+    }
+
+    $('#uploadingInProgressMsg').removeClass('hide');
+
+    //Add loading of page
+    if(options.selectMode == 'false'){
+      $('#loading_bar').css('display', 'block');
+    }
+    window.addEventListener('load', (event) => {
+      $('#loading_bar').css('display', 'none');
+    });
+
+    /* manipulate dom elements */
+    var expiredTime = parseInt('1784916899000') / 1000;
+    var dateExpiration = moment.unix(expiredTime).format('MMM D, YYYY');
+    var createdTime = parseInt('1784660064379') / 1000;
+    var createdDate = moment.unix(createdTime).format('MMM D, YYYY');
+    // document.getElementById("expiredId").innerHTML = 'Available until ' + dateExpiration +'';
+    document.getElementById("infoShareId").innerHTML = 'Shared on ' + createdDate +'';
+
+    if (1 > 1) {
+      document.getElementById("newFile").innerHTML = '' + 1 + '/' + 1 + ' files';
+    } else {
+      document.getElementById("newFile").innerHTML = '0/1 file';
+    }
+    let expiryObj = ShareLink.list.functions.expiryDuration(expiredTime);
+   
+    if (expiryObj.moreThanDayAndHour) {
+        document.getElementById("expiredId").innerHTML = 'Expires in ' + expiryObj.days + ' days ' + expiryObj.duration.hours() + ' hours';
+    }  else if (expiryObj.moreThanDay1Hour){
+        // ex 2 day 1 hour (1 args days) 
+        document.getElementById("expiredId").innerHTML = 'Expires in ' + expiryObj.days + ' days 1 hour';
+    } else if (expiryObj.moreThanDay) {
+        // ex 2 days (1 args days)
+        document.getElementById("expiredId").innerHTML = 'Expires in ' + expiryObj.days + ' days';
+    } else if (expiryObj.dayMoreThanHour) {
+        // ex 1 day 8 hours (1 args hours)
+        document.getElementById("expiredId").innerHTML = 'Expires in 1 day ' + expiryObj.duration.hours() + ' hours';
+    } else if (expiryObj.dayHour) {
+        // ex 1 day 1 hour (no args)
+        document.getElementById("expiredId").innerHTML = 'Expires in 1 day 1 hour';
+    } else if (expiryObj.dayOnly) {
+        // ex 1 day (no args)
+        document.getElementById("expiredId").innerHTML = 'Expires in 1 day';
+    } else if (expiryObj.moreThanHour) {
+        // ex 23 hrs (1 args hours)
+        document.getElementById("expiredId").innerHTML = 'Expires in ' + expiryObj.duration.hours() + ' hours';
+    } else if (expiryObj.hourOnly) {
+        // ex 1 hour (no args)
+        document.getElementById("expiredId").innerHTML = 'Expires in 1 hour';
+    } else {
+        document.getElementById("expiredId").innerHTML = '';
+    }
+    /* end of new expiration manipulation */
+    //CSS adjustment OnLoad for body with variable header height
+    setTimeout(() => {
+    ShareLink.list.functions.updateBodyTop();
+    }, 50); //Added timeout to ensure body is rendered
+
+    if(!ShareLink.globals.uploadCompleted && 
+    sessionStorage.getItem('backTriggered') == 'true' && 
+    sessionStorage.getItem('refreshTriggered') == 'true'){
+      sessionStorage.setItem('backTriggered', false);
+      sessionStorage.setItem('refreshTriggered', false);
+      $('#uploadingInProgressMsg').addClass('hide');
+      $('.refresh').addClass('hide');
+      sessionStorage.setItem('detailViewVisited', false); // chrome freeze issue no need to reload again if satisfied in this condition
+      location.reload();
+    } else {
+      if(sessionStorage.getItem('downloadingState') === 'true') {
+        $('#downloadInProgressMsg').addClass('show');
+        $('#uploadingInProgressMsg').addClass('hide');
+        ShareLink.list.functions.updateBodyTop();
+        sessionStorage.setItem('downloadingState', false);
+      }
+    }
+
+    if ('false' === 'true') {
+      window.history.pushState(null, null, window.location.href.split('?')[0]);
+      $('#unsupportedMsg').show();
+      $('body').css('overflow', 'hidden').on('touchmove', function (e) {
+        e.preventDefault();
+      });
+    }
+
+    $(window).bind('scroll', function() { // on scroll bottom loadmore
+      const isLoading = sessionStorage.getItem('isLoading');
+      const elem = options.selectMode ? $('.contentsListSelection').children().last() : $('#contentList').children().last();
+
+      if(elem.length) {
+        if(isElementInViewport(elem) && isLoading !== 'true')
+        paginateContents();
+      };
+    })
+
+    function isElementInViewport (el) {
+      if (typeof jQuery === "function" && el instanceof jQuery) {
+        el = el[0];
+      }
+
+      var rect = el.getBoundingClientRect();
+
+      return (
+        rect.top >= 0 &&
+        rect.left >= 0 &&
+        rect.bottom <= (window.innerHeight || document.documentElement.clientHeight) &&
+        rect.right <= (window.innerWidth || document.documentElement.clientWidth)
+      );
+    }
+
+    window.onbeforeunload = function () {};
+
+    window.addEventListener('pageshow', (event) => {
+      if(isChrome) { // Chrome freezing workaround solution
+        if(sessionStorage.getItem('detailViewVisited') === 'true') {
+          sessionStorage.setItem('detailViewVisited', false);
+          location.reload(); // chrome freeze workaround
+        }
+      }
+
+      if(options.selectMode) {
+        toggleSelectionMode();
+
+        if (isFirefox) { // for firefox to use cookie storage instead of session due to issue CSWEB-1542 - just transfer cookie to session again
+          var cookieSelectedIds = Cookies.get('selectedIds' + options.requestTime) || [];
+          var cookieUnselectedIds = Cookies.get('unSelectedIds' + options.requestTime) || [];
+
+          sessionStorage.setItem('selectedIds' + options.requestTime, cookieSelectedIds);
+          Cookies.remove('selectedIds');
+          sessionStorage.setItem('unSelectedIds' + options.requestTime, cookieUnselectedIds);
+          Cookies.remove('unSelectedIds');
+        }
+
+        let isInitialSelection = sessionStorage.getItem('selectedIds' + options.requestTime) === null
+        let selectedIds = sessionStorage.getItem('selectedIds' + options.requestTime) ?
+                sessionStorage.getItem('selectedIds' + options.requestTime).split(',') : [];
+
+        if (isInitialSelection) {
+          selectedIds = Array.from({ length: ShareLink.globals.contentsTotalCnt}, (_, index) => index + 1);
+          sessionStorage.setItem('selectedIds' + options.requestTime, selectedIds.join(','));
+        }
+
+        var $checkBoxElements = $('*[id^="chk"][id!="checkAll"]');
+        $checkBoxElements.each(function (index) {
+          if (selectedIds.indexOf((index + 1).toString()) > -1) {
+            $(this).prop("checked", true);
+            $(this).hide().show(0);
+          } else {
+            $(this).prop("checked", false);
+            $(this).hide().show(0);
+          }
+        });
+        
+        if (selectedIds.length > 0) {
+          $('#downloadFilesBtn').removeClass('off');
+          $('#downloadFilesBtn').addClass('on');
+        }
+        setTimeout(() => {
+          if (selectedIds.length > 0) {
+            if (selectedIds.length == ShareLink.globals.sharedatacontents.length) {
+              $('#checkAll').prop('checked', true);
+            } else {
+              $('#checkAll').prop('checked', false);
+            }
+          } else {
+            $('#downloadFilesBtn').removeClass('on');
+            $('#downloadFilesBtn').addClass('off');
+            $('#checkAll').prop('checked', false);
+          }
+        }, 0);
+          ShareLink.list.functions.updateCheckboxDesc();
+      }
+    });
+
+    if (!ShareLink.globals.uploadCompleted || ''.length > 0) {
+	    if ($('#contentList > li').length > 0) {
+		    $('#sub_content').addClass('mr_t240');
+	    }
+    }
+
+    if (ShareLink.globals.contentsTotalCnt <= 0) {
+      $('#showCheckBox').hide();
+      $("#downloadAllBtn").hide();
+      $("#downloadFilesBtn").hide();
+      $(".select_container").hide();
+    }
+
+    if (ShareLink.globals.contentsTotalCnt === 1) {
+      $(".select_container").hide();
+    }
+
+    if ('1' === '1') {
+      $('#selectFilesBtn').addClass('on');
+      document.getElementById("selectFilesBtn").innerHTML = 'Download';
+    }
+
+    if (ShareLink.list.selectMode) {
+      $('#contentList').addClass('select_area');
+    }
+
+    /* attach event binding */
+    $('#showCheckBox').on('click', function (e) {
+      if ($('#contentList > li').length === 1) {
+        ShareLink.list.functions.downloadSingleContent();
+      } else {
+        window.location.href = ShareLink.urls.contentsListUrl + '?' + $.param({
+          'contentsToken': ShareLink.globals.contentsToken,
+          'checkbox': true,
+          'callExtraInfo': 'showCheckBox',
+          'linkUrlVersion': ShareLink.globals.linkUrlVersion
+        });
+      }
+      e.preventDefault();
+      e.stopPropagation();
+    });
+
+    $('body').on('click', '#showCheckBox', function (e) {
+      if ($('#contentList > li').length === 1) {
+        ShareLink.list.functions.downloadSingleContent();
+      } else {
+        window.location.href = ShareLink.urls.contentsListUrl + '?' + $.param({
+          'contentsToken': ShareLink.globals.contentsToken,
+          'checkbox': true,
+          'callExtraInfo': 'showCheckBox',
+          'linkUrlVersion': ShareLink.globals.linkUrlVersion
+        });
+      }
+      e.preventDefault();
+      e.stopPropagation();
+    });
+
+    $('#selectFilesBtn').on('click', function (e) {
+      if ('1' === '1') {
+        ShareLink.list.functions.downloadSingleContent();
+      } else {
+        sessionStorage.setItem('selectAllTriggered', true);
+        sessionStorage.setItem('unSelectTriggered', false);
+        options.selectMode = true;
+        window.location.hash = "#selectionMode";
+        // $('.contentsListSelection input[type=checkbox]:checked').trigger('change');
+        ShareLink.list.functions.selectAllCheckbox();
+      }
+
+      sessionStorage.setItem('unSelectedIds' + options.requestTime, '');
+      $('.footer_link').removeClass('check-true');
+      $('.footer_link').addClass('check-false');
+      e.preventDefault();
+    });
+
+    $('#cancelSelectBtn').on('click', function (e) {
+      options.selectMode = false;
+
+      var isSelectAllTriggered = sessionStorage.getItem('selectAllTriggered') === 'true';
+      
+      if(isSelectAllTriggered) {
+        history.go(-1);
+      } else {
+        /** This block covers the scenario when #selectionMode is accessed through
+         * hard url to prevent going to new tab page when cancel select is pressed.
+         * This also removes the # on url when hash is reassigned to empty string.
+        **/
+        window.location.hash = '';
+        var uri = window.location.toString();
+        if (uri.indexOf("#") > 0) {
+          var clean_uri = uri.substring(0,uri.indexOf("#"));
+          window.history.replaceState({},document.title, clean_uri);
+        }
+      }
+
+      sessionStorage.setItem('backTriggered', true);
+      sessionStorage.setItem('selectAllTriggered', false);
+      sessionStorage.setItem('selectedIds' + options.requestTime, '');
+      e.preventDefault();
+      $('.footer_link').removeClass('check-false');
+      $('.footer_link').addClass('check-true');
+    });
+
+    $('.file_wrap').on('click', function (e) {
+      window.location.href = ShareLink.globals.contextPath + ShareLink.urls.contentsViewUrl + '?' + $.param({ 
+        'contentsToken': ShareLink.globals.contentsToken,
+        'currentIndex': this.id,
+        'linkUrlVersion': ShareLink.globals.linkUrlVersion
+      });
+      e.preventDefault();
+      e.stopPropagation();
+    });
+
+    $('body').on('click', '.file_wrap', function (e) {
+      if(isChrome) {
+        $('body').css('display', 'none');
+        sessionStorage.setItem('detailViewVisited', true);
+      }
+      sessionStorage.setItem('downloadingState', $('#downloadInProgressMsg')[0].classList.value.includes('show'));
+      setTimeout(() => {
+        window.location.href = ShareLink.globals.contextPath + ShareLink.urls.contentsViewUrl + '?' + $.param({ 
+          'contentsToken': ShareLink.globals.contentsToken,
+          'currentIndex': this.id,
+          'linkUrlVersion': ShareLink.globals.linkUrlVersion
+        });
+      }, 100);
+      e.preventDefault();
+      e.stopPropagation();
+    });
+
+    $('#checkAll').on('change', function () {
+      $(this).next('label').removeClass('sel');
+      if(this.checked){
+        sessionStorage.setItem('unSelectTriggered', false);
+        sessionStorage.setItem('selectAllTriggered', true);
+        sessionStorage.setItem('unSelectedIds' + options.requestTime, '');
+        return ShareLink.list.functions.selectAllCheckbox();
+      }
+      sessionStorage.setItem('unSelectTriggered', true)
+      sessionStorage.setItem('selectAllTriggered', false);
+      ShareLink.list.functions.unSelectAllCheckbox();
+    });
+
+    var getZipFileName = function (){
+      var today = new Date();
+      var date = today.getFullYear().toString().substr(-2) + (today.getMonth() + 1).toString().padStart(2, "0")
+        + today.getDate().toString().padStart(2, "0")
+        + today.getHours().toString().padStart(2, "0")
+        + today.getMinutes().toString().padStart(2, "0");
+      var zipFileName = 'QuickShare_' + date + '.zip';
+
+      $('.zipProgress-msg h3').text(zipFileName);
+      return zipFileName;
+    }
+
+
+    var paginateContents = function() {
+      var currLength = $('#contentList > li').length + 1;
+
+      sessionStorage.setItem('isLoading', 'true');
+      let paginatedArray =  ShareLink.globals.sharedatacontents.slice((page - 1) * pageSize, page * pageSize);
+      if(paginatedArray.length){
+        paginatedArray.map((item, index) => { // loop for regular list mode
+          let itemHTML = '';
+            if(item.contentType.includes('text/plain') && paginatedArray.length === 1 && ShareLink.globals.uploadCompleted) {
+              $('#fileNameText').text(item.name + " " + "(" + item.formattedFileSize + ")");
+              ShareLink.list.functions.displayTextContent();
+              $('.list').addClass('noDisplay');
+              $('.onlyText').show();
+              $('.previewText').show();
+            }
+            else {
+              $('.onlyText').hide();
+              $('.previewText').hide();
+              if(!item.thumbnail) {
+                itemHTML += 
+                  `<li id=${index + currLength} class="file_wrap content_class">
+                    <a href=#/ class=file_category>
+                      <span class="file_type new">${item.name}</span>
+                      <img src=${item.fileTypeCategoryThumbnailPath} alt="${item.name}" longdesc=${item.original} />
+                    </a>
+                  </li>`
+              } else {
+                if(item.contentType.includes('video')){
+                  itemHTML += 
+                    `<li id=${index + currLength} class=file_wrap content_class>
+                      <a href="#/">
+                        <img 
+                          src=${item.thumbnail} 
+                          alt="${item.name}" longdesc=${item.original} 
+                          onerror="this.src='${options.imageResourcePath}/file_type_icon/broken.svg'; this.parentElement.classList.add('file_broken');"
+                        />
+                        <span class=movie_type>
+                          <img src=${options.imageResourcePath}/linksharing_view_video_ic.png alt=movie icon />
+                        </span>
+                        <span class="movie_type">
+                          <img src=${options.imageResourcePath}/linksharing_view_video_ic.png alt="movie icon">
+                        </span>
+                      </a>
+                    </li>`
+                } else if(item.contentType.includes('audio')){
+                  itemHTML += 
+                    `<li id=${index + currLength} class=file_wrap content_class>
+                      <a href=#/>
+                        <img 
+                          src=${item.thumbnail} 
+                          alt="${item.name}" longdesc=${item.original} 
+                          onerror="this.src='${options.imageResourcePath}/file_type_icon/broken.svg'; this.parentElement.classList.add('file_broken');"
+                        />
+                        <span class=movie_type>
+                          <img src=${options.imageResourcePath}/linksharing_view_music_ic.png alt=music icon />
+                        </span>
+                        <span class="movie_type">
+                          <img src=${options.imageResourcePath}/linksharing_view_music_ic.png alt="music icon">
+                        </span>
+                      </a>
+                    </li>`
+                } else if(item.contentType.includes('x-icon')) {
+                  itemHTML += 
+                    `<li id=${index + currLength} class="file_wrap content_class">
+                      <a href=#/ class=file_category>
+                        <span class="file_type new">${item.name}</span>
+                        <img src='${options.imageResourcePath}/file_type_icon/etc.svg' alt="${item.name}" longdesc=${item.original} />
+                      </a>
+                    </li>`
+                } else {
+                  itemHTML += 
+                    `<li id=${index + currLength} class="file_wrap content_class">
+                      <a href="#/">
+                        <img
+                          src=${item.thumbnail}
+                          alt="${item.name}" longdesc=${item.original}
+                          onerror="this.src='${options.imageResourcePath}/file_type_icon/broken.svg'; this.parentElement.classList.add('file_broken');"
+                        />
+                      </a>
+                    </li>`
+                }
+              }
+            }
+          
+          $('#contentList').append(itemHTML);
+        });
+
+        paginatedArray.map((item, index) => { // loop for selection mode
+        let itemHTML = '';
+        if(!item.thumbnail) {
+          itemHTML +=
+            `<li id=${index + currLength}>
+              <input type="checkbox" id=chk${index + currLength} value=${index + currLength} checked=${options.isSelectAllMode} />
+              <label for=chk${index + currLength} class="file_category">
+                <span class="file_type new select_mode">${item.name}</span>
+                <img src=${item.fileTypeCategoryThumbnailPath}
+                  alt="${item.name}"
+                  longdesc=${item.original}
+                />
+                <input id=${index + currLength} type="button" class="expandBtn" />
+              </label>
+            </li>`
+        } else {
+          // for selectionMode
+          if(item.contentType.includes('video')){
+            itemHTML += 
+              `<li id=${index + currLength}>
+                <input type="checkbox" id=chk${index + currLength} value=${index + currLength} checked=${options.isSelectAllMode} />
+                <label for=chk${index + currLength}>
+                  <img src=${item.thumbnail} alt="${item.name}" longdesc=${item.original}
+                    onerror=this.src='${options.imageResourcePath}/file_type_icon/broken.svg'; this.parentElement.classList.add('file_broken');/> 
+                  <span class="movie_type">
+                    <img src=${options.imageResourcePath}/linksharing_view_video_ic.png alt="movie icon">
+                  </span>
+                  <span class="movie_type">
+                    <img src=${options.imageResourcePath}/linksharing_view_video_ic.png alt="movie icon">
+                  </span>
+                  <input id=${index + currLength} type="button" class="expandBtn" />
+                </label>
+              </li>`
+          } else if(item.contentType.includes('audio')){
+            itemHTML += 
+              `<li id=${index + currLength}>
+                <input type="checkbox" id=chk${index + currLength} value=${index + currLength} checked=${options.isSelectAllMode} />
+                <label for=chk${index + currLength}>
+                  <img src=${item.thumbnail} alt="${item.name}" longdesc=${item.original}
+                    onerror=this.src='${options.imageResourcePath}/file_type_icon/broken.svg'; this.parentElement.classList.add('file_broken');/> 
+                  <span class="movie_wrap"></span><span class="movie_type">
+                    <img src=${options.imageResourcePath}/linksharing_view_music_ic.png alt="movie icon">
+                  </span>
+                  <span class="movie_wrap"></span>
+                  <span class="movie_type">
+                    <img src=${options.imageResourcePath}/linksharing_view_music_ic.png alt="movie icon">
+                  </span>
+                  <input id=${index + currLength} type="button" class="expandBtn" />
+                </label>
+              </li>`
+            } else if(item.contentType.includes('x-icon')) {
+              itemHTML += 
+                `<li id=${index + currLength}>
+                  <input type="checkbox" id=chk${index + currLength} value=${index + currLength} checked=${options.isSelectAllMode} />
+                  <label for=chk${index + currLength} class="file_category">
+                    <span class="file_type new select_mode">${item.name}</span>
+                    <img src='${options.imageResourcePath}/file_type_icon/etc.svg'
+                      alt="${item.name}"
+                      longdesc=${item.original}
+                    />
+                    <input id=${index + currLength} type="button" class="expandBtn" />
+                  </label>
+                </li>`
+            } else {
+            itemHTML += 
+              `<li id=${index + currLength}>
+                <input type="checkbox" id=chk${index + currLength} value=${index + currLength} checked=${options.isSelectAllMode} />
+                <label for=chk${index + currLength}>
+                  <img src=${item.thumbnail}
+                    alt="${item.name}"
+                    longdesc=${item.original}
+                    onerror="this.src='${options.imageResourcePath}/file_type_icon/broken.svg'; this.parentElement.classList.add('file_broken');"
+                  />
+                  <input id=${index + currLength} type="button" class="expandBtn" /> 
+                </label>
+              </li>`
+            }
+        }
+        $('.contentsListSelection').append(itemHTML);
+      });
+
+      var selectedIds = sessionStorage.getItem('selectedIds' + options.requestTime) ?
+                sessionStorage.getItem('selectedIds' + options.requestTime).split(',') : [];
+      if(sessionStorage.getItem('unSelectTriggered') === 'true'){
+        var $checkBoxElements = $('*[id^="chk"][id!="checkAll"]');
+        $checkBoxElements.each(function (index) {
+            $(this).prop("checked", false);
+            $(this).hide().show(0);
+        });
+      }
+      page++;
+
+      let unselectedIds = sessionStorage.getItem('unSelectedIds' + options.requestTime)?.split(',') || [];
+      
+      if(unselectedIds.length){
+        unselectedIds.map(id => {
+          $(`#chk${id}`).prop('checked', false);
+        });
+      };
+
+      const newSelectedIds = sessionStorage.getItem('selectedIds' + options.requestTime)?.split(',') || [];
+      if(sessionStorage.getItem('unSelectTriggered') === 'true' && newSelectedIds.length){
+        newSelectedIds.map(id => {
+          $(`#chk${id}`).prop('checked', true);
+        })
+      }
+      } else {
+        $('.onlyText').hide();
+        $('.previewText').hide();
+      }
+      sessionStorage.setItem('isLoading', 'false');
+      ShareLink.list.functions.updateCounter();
+    };
+
+    var attachDownloadEvents = function(isDownloadAll, selectedIds=[]) {
+      if(isDownloadAll) {
+        $('#individualDownload').click(function() {
+          $('#downloadOption').addClass('noDisplay');
+          ShareLink.list.functions.downloadAllContents();
+        });
+        $('#zipDownload').click(function() {
+          var allIds = Array.from({length: ShareLink.globals.contentsTotalCnt}, (_, i) => i + 1); // pass all IDS
+          $('#progressOverlay').removeClass('noDisplay');
+          $('#downloadOption').addClass('noDisplay');
+          $('#uploadingInProgressMsg').addClass('hide');
+          $('#downloadInProgressMsg').addClass('show');
+          $('body').addClass('noScroll');
+          ShareLink.list.functions.updateBodyTop();
+          ShareLink.list.functions.downloadAsZip(allIds, getZipFileName()); // set to true if zip download All, otherwise selected items only
+        });
+      } else {
+        $('#individualDownload').click(function() {
+          $('#downloadOption').addClass('noDisplay');
+          ShareLink.list.functions.downloadContents();
+        });
+        $('#zipDownload').click(function() {
+          $('#progressOverlay').removeClass('noDisplay');
+          $('#downloadOption').addClass('noDisplay');
+          $('#uploadingInProgressMsg').addClass('hide');
+          $('#downloadInProgressMsg').addClass('show');
+          $('body').addClass('noScroll');
+          ShareLink.list.functions.updateBodyTop();
+          ShareLink.list.functions.downloadAsZip(selectedIds, getZipFileName());
+        });
+      }
+    }
+
+    $(document).on('click', '.refresh', async function (e) {
+      const isRTL = 'false';
+      $('.refresh img').attr('src', "/resources/images/loadingbar.gif");
+
+      sessionStorage.setItem('refreshTriggered', true);
+      await ShareLink.list.functions.refreshContents();
+      isRTL === 'true' ? $('#listInfo .file').attr("dir","rtl") : null;
+      $("#contentList li").remove();
+      $(".contentsListSelection li").remove();
+
+      page = 1;
+      paginateContents();
+      $('#loading_bar').css('display', 'none');
+    });
+
+    $('#downloadFilesBtn').on('click', function (e) {
+      var selectedIds = sessionStorage.getItem('selectedIds' + options.requestTime) ? sessionStorage.getItem('selectedIds' + options.requestTime).split(',') : [];
+      if (selectedIds.length > 1) {
+        $('#downloadOption').removeClass('noDisplay');
+        attachDownloadEvents(false, selectedIds);
+      } else {
+        ShareLink.list.functions.downloadContents();
+      }
+      e.preventDefault();
+      e.stopPropagation();
+    });
+
+    $('#downloadAllBtn').on('click', function (e) {
+      if(ShareLink.globals.contentsTotalCnt > 1) {
+        $('#downloadOption').removeClass('noDisplay');
+        attachDownloadEvents(true);
+      } else {
+        ShareLink.list.functions.downloadAllContents();
+      }
+      e.preventDefault();
+      e.stopPropagation();
+    });
+
+    $('.cancelOk').click(function(){
+      $('#progressOverlay').addClass('noDisplay');
+      $('.zipProgress-msg').removeClass('noDisplay');
+      $('.zipError-msg').addClass('noDisplay');
+      $('body').removeClass('noScroll');
+      if(window.location.hash === '#selectionMode') window.history.back(); // remove selection mode
+    });
+
+    $('#cancelZip').click(function() {
+      if(ShareLink.functions.xhr) {
+        ShareLink.functions.xhr.abort(); // cancel the api request on zip
+      }
+    });
+
+    ShareLink.list.functions.attachEventActions(); // attach events on list items 
+  
+    $('.learn-more').on('click', function(){
+      $('#dialogOverlay').removeClass('noDisplay');
+      $('body').addClass('noScroll');
+    });
+
+    $('.dialogCloseBtn').on('click', function(){
+      $('#dialogOverlay').addClass('noDisplay');
+      $('body').removeClass('noScroll');
+    });
+
+    let page = 1; // initial page
+    const pageSize = 60; // pagesize default
+    paginateContents();
+  });
+
+  $(document).click(function (e){
+    if(!e.target.closest('#downloadOption')) {
+      $('#individualDownload, #zipDownload').unbind('click');
+      $('#downloadOption').addClass('noDisplay');
+    }
+  });
+
+  $(document).on('click', '#installBtn, .open_in_app', async function (e) {
+    var url;
+    e.preventDefault();
+    if (isAndroid && !deviceInfo.uaModel) {
+      await resolveDeviceInfo();
+    }
+
+    if (canOpenNativeApp()) {
+      openNativeApp();
+    } else if (RemoteShare.SupportedWindows.isDesktop() && '460' !== '') {
+      url = 'samsung-linksharing-add-link:?linkurl={linkUrl}';
+      RemoteShare.functions.recordOpenAppLog('linkshare', ShareLink.globals.contentsToken);
+      url = url.replace('{linkUrl}', ShareLink.globals.linkUrl);
+      window.location.href = url;
+    } else {
+      $('#unsupportedMsg').show();
+      $('body').css('overflow', 'hidden').on('touchmove', function (e) {
+        e.preventDefault();
+      });
+    }
+  }).on('click', '#okBtn', function (e) {
+    $('#unsupportedMsg').hide();
+    $('body').css('overflow', 'auto').off('touchmove');
+    e.preventDefault();
+    e.stopPropagation();
+  });
+
+  $(document).on('click', '.file_wrap.handlebars_file', function (e) {
+      window.location.href = ShareLink.globals.contextPath + ShareLink.urls.contentsViewUrl + '?' + $.param({ 
+        'contentsToken': ShareLink.globals.contentsToken,
+        'currentIndex': this.id,
+        'linkUrlVersion': ShareLink.globals.linkUrlVersion
+      });
+      e.preventDefault();
+      e.stopPropagation();
+  });
+
+  $(window).on('hashchange', function() {
+    toggleSelectionMode();
+  });
+
+  $(window).resize(function() { 
+    //CSS adjustment on resize for body with variable header height
+    var subContentBody = document.getElementById("sub_content");
+    if (subContentBody){
+      ShareLink.list.functions.updateBodyTop();
+    }
+  });
+
+  $(window).load(function () {
+    //CSS adjustment on load for body with variable header height
+    ShareLink.list.functions.updateBodyTop();
+    ShareLink.list.functions.landingStatsLog();
+
+    $('#contentList img').each(function () {
+      if (!this.complete || typeof this.naturalWidth === "undefined" || this.naturalWidth === 0) {
+        this.src = '/resources/images/file_type_icon/broken.svg';
+        this.parentElement.classList.add('file_broken');
+      }
+    });
+  });
+  
+  var toggleSelectionMode = function() {
+    if(window.location.hash === '#selectionMode') {
+      $('.check_container').removeClass('noDisplay');
+      $('#selectFilesBtn').addClass('noDisplay');
+      $('#cancelSelectBtn').removeClass('noDisplay');
+      $('.contentsListNormal').addClass('noDisplay');
+      $('.contentsListSelection').removeClass('noDisplay');
+
+      $('#downloadAllBtn').addClass('noDisplay');
+      $('#downloadFilesBtn').removeClass('noDisplay');
+    } else {
+      $('.check_container').addClass('noDisplay');
+      $('#selectFilesBtn').removeClass('noDisplay');
+      $('#cancelSelectBtn').addClass('noDisplay');
+      $('.contentsListNormal').removeClass('noDisplay');
+      $('.contentsListSelection').addClass('noDisplay');
+
+      $('#downloadAllBtn').removeClass('noDisplay');
+      $('#downloadFilesBtn').addClass('noDisplay');
+    }
+  }
+
+//]]&gt;
+//-->
+</script>
+</head>
+
+<body>
+  <!-- wrap -->
+  <div id="wrap" class="body_container check-true exp-false">
+    <!-- header -->
+    <header id="headerId">
+      <div class="fix_wrap">
+        <div class="header_container">
+          <a id="installBtn" href="#/">
+            <span class="photo"><img src="/resources/images/Webview_app_icon_quick_share_new.png"
+                alt="install link icon"></span>
+            <span class="sender"></span>
+          </a>
+          <div class="open_in_app_area">
+            <span class="open_in_app"></span>
+          </div>
+        </div>
+      </div>
+      
+          <div class="info_wrap">
+
+            <div class="button_wrap">
+              <div class="header_container">
+                <span id="listInfo" class="list_info info_container">
+                  <span id="infoShareId" class="infoShareText"></span>
+
+                  <span>
+                    <span id="fileNameText" class="file">
+                              <span id="newFile" class="newFile noDisplay"></span>
+                              1 file&nbsp;(297.6 MB)
+                            </span>
+                          </span>
+    
+                  <span>
+                    <span id="expiredId" class="expired">
+                    </span>
+                  </span>
+                </span>
+
+                <span class="download_container">
+                  <!-- <a href="#/" id="downloadAllBtn" class="link_button on link_button_mod">Download</a>
+                  <a href="#/" id="downloadFilesBtn" class="link_button off link_button_mod noDisplay">Download</a> -->
+                  <button id="downloadAllBtn" class="link_button on link_button_mod">
+                    <span>Download</span>
+                  </button>
+
+                  <button id="downloadFilesBtn" class="link_button off link_button_mod noDisplay">
+                    <span>Download</span>
+                  </button>
+                  <!-- <a href="#/" id="downloadAllBtn" class="link_button on link_button_mod">Download</a>
+                     -->
+                </span>
+
+
+                <div id="downloadOption" class="noDisplay">
+                  <ul>
+                    <li id="individualDownload">Download as individual files</li>
+                    <li id="zipDownload">Download as ZIP file</li>
+                    </ul>
+                </div>
+              </div>
+
+              <div id="downloadInProgressMsg" class="detailIncomplete">
+                <div class="detailIncomplete">
+                  <span>
+                    After downloading, the files will appear in your Downloads folder.</span>
+                  <span class='learn-more'>
+                    Learn more</span>
+                </div>
+              </div>
+
+              <div class="header_spacer"></div>
+                    <div class="select_container">
+                <span class="check_container noDisplay">
+                  <div id="checkArea" class="check_area">
+                    <p><input type="checkbox" id="checkAll" /><label for="checkAll"></label></p>
+                    <p class="all"><label for="checkAll">
+                        All</label></p>
+                  </div>
+                  <div id="selectedCount" class="count">
+                    Select items</div>
+                </span>
+
+                <p id="selectFilesBtn" class="selectionBtn">
+                  Select</p>
+
+                <p id="cancelSelectBtn" class="selectionBtn noDisplay">
+                  Cancel</p>
+              </div>
+              
+            </div>
+          </div>
+    
+    </header>
+  
+    <!-- sub_content -->
+    <div id="sub_content" class="sub-cont-false check-true">
+      <div class="previewText">Preview</div>
+      <pre class="onlyText">
+        <div id="textFileView"></div>
+      </pre>
+      <!-- list -->
+      <div class="list">
+        <!--img_wrap -->
+        <ul id="contentList" class="img_wrap contentsListNormal">
+          </ul>
+
+        <ul class="img_wrap contentsListSelection noDisplay">
+          </ul>
+        <!-- //img_wrap -->
+      </div>
+      <!-- //list -->
+    </div>
+    <!-- //sub_content -->
+
+    <!-- layer pop-->
+    <!--     <div id="" class="bg_pop"> -->
+    <!--       <div class="layer_pop"> -->
+    <!--          <p class="txt_service">Link Sharing application will be available soon.</p> -->
+    <!--       </div> -->
+    <!--     </div> -->
+    <!-- layer pop-->
+    <div id="unsupportedMsg" class="bg_pop">
+      <div class="layer_pop ok">
+        <h3>
+          App not available</h3>
+        <p class="txt_service">
+          Link Sharing will be available soon.</p>
+        <p id="okBtn" class="pop_btns ok"><a href="#" class="btn_ok">
+            OK</a></p>
+      </div>
+    </div>
+
+    <!-- popup dialog info -->
+    <div id="dialogOverlay" class="noDisplay">
+      <div id="dialogInfo">
+        <h3>Open downloaded files</h3>
+        <ul>
+          <li>All downloaded files will appear in the Downloads folder in the Files app.</li>
+          <li>You may also be able to change the folder where files are downloaded in your browser's settings.</li>
+        </ul>
+        <h3>View images and videos in the Photos app</h3>
+        <ul>
+          <li>In the Files app, select the images and videos you downloaded.</li>
+          <li>Tap the Share button, then save the images and videos to the Photos app.</li>
+        </ul>
+      
+        <button class="dialogCloseBtn">
+          Close</button>
+      </div>
+    </div>
+    <!-- //popup dialog info -->
+
+    <div id="progressOverlay" class="noDisplay">
+      <div id="progressModal">
+        <div class="zipProgress-msg">
+          <span class="loadingIcon"></span>
+          <h3>QuickShare.zip</h3>
+          <p>Compressing...</p>
+          <div class="progressBtn">
+            <button id="cancelZip" class="cancelOk">Cancel</button>
+          </div>
+        </div>
+        
+        <div class="zipError-msg noDisplay">
+          <p>There was a problem compressing the files.</p class="zipError-msg"> 
+          <div class="progressBtn">
+            <button class="cancelOk">OK</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+  </div>
+  <!-- //wrap -->
+<script id="list-template" type="text/x-handlebars-template">
+{{!-- {{#each contents}} can be replaced with {{#contents}}  --}}
+{{#compare ../contentsTotalToUpload "!==" -1}}
+  {{#each contents}}
+    {{#compare (incr @index) ">" ../previousItemCnt}}
+      {{#unless thumbnail}}
+        <li id="{{incr @index}}" class="file_wrap content_class handlebars_file"><a href="#/"><span class="file_type new">{{name}}</span><img src="{{fileTypeCategoryThumbnailPath}}" alt="{{name}}" longdesc="{{original}}" /></a></li>
+      {{else}}
+        {{#isVideoType contentType}}
+          <li id="{{incr @index}}" class="file_wrap content_class handlebars_file">
+            <a href="#/">
+              <img src="{{thumbnail}}" alt="{{name}}" longdesc="{{original}}" />
+              <span class="movie_wrap"></span><span class="movie_type"><img src="/resources/images/linksharing_view_video_ic.png" alt="movie icon"></span><span class="file_capacity">{{formattedFileSize}}</span>
+            </a>
+          </li>
+        {{else}}
+          <li id="{{incr @index}}" class="file_wrap content_class handlebars_file"><a href="#/"><img src="{{thumbnail}}" alt="{{name}}" longdesc="{{original}}" onerror="this.src='/resources/images/file_type_icon/broken.svg'; this.parentElement.classList.add('file_broken');" /></a></li>
+        {{/isVideoType}}
+      {{/unless}}
+    {{/compare}}
+  {{/each}}
+{{/compare}}
+</script>
+
+  <script id="list-selectMode-template" type="text/x-handlebars-template">
+{{#compare ../contentsTotalToUpload "!==" -1}}
+  {{#each contents}}
+    {{#compare (incr @index) ">" ../previousItemCnt}}
+      {{#unless thumbnail}}
+        <li id="{{incr @index}}"><input type="checkbox" id="chk{{incr @index}}" value="{{incr @index}}" /><label for="chk{{incr @index}}"><span class="file_type new">{{name}}</span><img src="{{fileTypeCategoryThumbnailPath}}" alt="{{name}}" longdesc="{{original}}" /><input id="{{incr @index}}" type="button" class="expandBtn" /></label></li>
+      {{else}}
+        {{#isVideoType contentType}}
+          <li id="{{incr @index}}">
+              <input type="checkbox" id="chk{{incr @index}}" value="{{incr @index}}" />
+              <label for="chk{{incr @index}}" >
+                <img src="{{thumbnail}}" alt="{{name}}" longdesc="{{original}}" />
+                <span class="movie_wrap"></span><span class="movie_type"><img src="/resources/images/linksharing_view_video_ic.png" alt="movie icon"></span><span class="file_capacity">{{formattedFileSize}}</span>
+                <input id="{{incr @index}}" type="button" class="expandBtn" />
+              </label>
+          </li>
+        {{else}}
+          <li id="{{incr @index}}"><input type="checkbox" id="chk{{incr @index}}" value="{{incr @index}}" /><label for="chk{{incr @index}}" ><img src="{{thumbnail}}" alt="{{name}}" longdesc="{{original}}" onerror="this.src='/resources/images/file_type_icon/broken.svg'; this.parentElement.classList.add('file_broken');" /><input id="{{incr @index}}" type="button" class="expandBtn" /></label></li>
+        {{/isVideoType}}
+      {{/unless}}
+    {{/compare}}
+  {{/each}}
+{{/compare}}
+</script>
+
+<script id="listInfo-template" type="text/x-handlebars-template">
+  {{#if uploadCompleted}}
+    <span class="infoShareText">Shared on curDatePlaceholder</span>
+
+    <span class="file noDisplay">
+      <span class="newFile newFile1 noDisplay">
+        fileCount/totalCount files</span>
+      <span class="newFile newFile2 noDisplay">
+        0/1 file</span>
+      &nbsp;({{formattedSizeOfContentsUploaded}}/{{formattedContentsTotalFileSize}})
+    </span>
+
+    <span id="fileNameText" class="file">{{formattedContentsTotalCnt}}&nbsp;({{formattedContentsTotalFileSize}})</span>
+    <span class="expired expired1 noDisplay" >Expires in expDay days expHour hours</span>
+    <span class="expired expired2 noDisplay" >Expires in expDay days 1 hour</span>
+    <span class="expired expired3 noDisplay" >Expires in expDay days</span>
+    <span class="expired expired4 noDisplay" >Expires in 1 day expHour hours</span>
+    <span class="expired expired5 noDisplay" >Expires in 1 day 1 hour</span>
+    <span class="expired expired6 noDisplay" >Expires in 1 day</span>
+    <span class="expired expired7 noDisplay" >Expires in expHour hours</span>
+    <span class="expired expired8 noDisplay" >Expires in 1 hour</span>
+  {{else}}
+    <span class="infoShareText">Shared on curDatePlaceholder</span>
+
+    <span id="fileNameText" class="file">
+      <span class="newFile newFile1 noDisplay">
+        fileCount/totalCount files</span>
+      <span class="newFile newFile2 noDisplay">
+        0/1 file</span>
+      &nbsp;({{formattedSizeOfContentsUploaded}}/{{formattedContentsTotalFileSize}})
+    </span>
+    
+    <span class="expired expired1 noDisplay" >Expires in expDay days expHour hours</span>
+    <span class="expired expired2 noDisplay" >Expires in expDay days 1 hour</span>
+    <span class="expired expired3 noDisplay" >Expires in expDay days</span>
+    <span class="expired expired4 noDisplay" >Expires in 1 day expHour hours</span>
+    <span class="expired expired5 noDisplay" >Expires in 1 day 1 hour</span>
+    <span class="expired expired6 noDisplay" >Expires in 1 day</span>
+    <span class="expired expired7 noDisplay" >Expires in expHour hours</span>
+    <span class="expired expired8 noDisplay" >Expires in 1 hour</span>
+    
+  {{/if}}
+</script>
+  </body>
+
+</html>
+
