@@ -34,12 +34,17 @@ class DirectDownloader:
 
         filename = self._filename(response, url)
 
+        # Save to Android Downloads folder
+        download_dir = "/storage/emulated/0/Download"
+        os.makedirs(download_dir, exist_ok=True)
+        filepath = os.path.join(download_dir, filename)
+
         total = int(response.headers.get("Content-Length", 0))
         downloaded = 0
 
         start_time = time.time()
 
-        with open(filename, "wb") as f:
+        with open(filepath, "wb") as f:
             for chunk in response.iter_content(self.chunk_size):
 
                 if not chunk:
@@ -65,4 +70,4 @@ class DirectDownloader:
                     eta
                 )
 
-        self.ui.finish(filename)
+        self.ui.finish(filepath)
