@@ -1,5 +1,6 @@
 from downloaders.direct import DirectDownloader
 from downloaders.gdrive import GoogleDrive
+from downloaders.github import GitHubRelease
 from downloaders.mediafire import MediaFire
 from downloaders.quickshare import QuickShare
 from terminal_ui import TerminalUI
@@ -16,6 +17,9 @@ def detect_source(url):
 
     if "quickshare.samsungcloud.com" in lowered:
         return "Samsung Quick Share", QuickShare
+
+    if GitHubRelease.supports(url):
+        return "GitHub Releases", GitHubRelease
 
     return "Direct URL", DirectDownloader
 
