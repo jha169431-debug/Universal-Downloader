@@ -7,7 +7,7 @@ import time
 class TerminalUI:
     """Small, dependency-free terminal UI for Universal Downloader."""
 
-    VERSION = "4.8"
+    VERSION = "4.9"
 
     RESET = "\033[0m"
     BOLD = "\033[1m"
@@ -22,6 +22,7 @@ class TerminalUI:
         self.refresh_interval = refresh_interval
         self._last_draw = 0.0
         self._spinner_index = 0
+        self._cursor_hidden = False
         self._interactive = (
             sys.stdout.isatty()
             and os.environ.get("TERM", "") != "dumb"
@@ -35,6 +36,18 @@ class TerminalUI:
         if not self._color:
             return text
         return f"{code}{text}{self.RESET}"
+
+    def _hide_cursor(self):
+        if self._interactive and not self._cursor_hidden:
+            sys.stdout.write("\033[?25l")
+            sys.stdout.flush()
+            self._cursor_hidden = True
+
+    def _show_cursor(self):
+        if self._interactive and self._cursor_hidden:
+            sys.stdout.write("\033[?25h")
+            sys.stdout.flush()
+            self._cursor_hidden = False
 
     def clear(self):
         if self._interactive:
@@ -72,7 +85,7 @@ class TerminalUI:
             value /= 1024
 
     def _format_speed(self, speed):
-        # speed is provided in MB/s by DirectDownloader
+        # speed is provided in MB/s
         speed = max(0.0, float(speed or 0))
 
         if speed >= 1024:
@@ -144,8 +157,6 @@ class TerminalUI:
         if 0 < percent < 100:
             tick = int(time.monotonic() * 14)
 
-            # A longer body gives a much more "crawling" motion.
-            # The peak rolls through the body while both ends taper off.
             poses = (
                 ("·", "·", "•", "●", "●", "●", "•", "·", "·"),
                 ("·", "•", "●", "●", "●", "•", "·", "·", "•"),
@@ -165,8 +176,6 @@ class TerminalUI:
             for offset, glyph in enumerate(source):
                 cells[start + offset] = glyph
 
-            # Micro-step the nose according to fractional progress so the
-            # front moves continuously rather than one whole pip at a time.
             fraction = exact - int(exact)
             if len(cells) < pip_count:
                 if fraction >= 0.78:
@@ -176,15 +185,11 @@ class TerminalUI:
                 elif fraction >= 0.26:
                     cells.append("·")
 
-            # Tiny breathing head: every few frames, make the final live pip
-            # pulse once. This reads like the old iPhone signal pips waking up.
             if cells and (tick % 6 in (1, 2)):
                 cells[-1] = "●"
             elif cells and tick % 6 in (3, 4):
                 cells[-1] = "•"
-
         else:
-            # Completion resolves into a strong, stable row.
             cells = ["●"] * full
 
         return " ".join(cells)
@@ -197,7 +202,6 @@ class TerminalUI:
                 prefix = "\033[2J\033[H"
                 self.first_draw = False
             else:
-                # Repaint in place instead of clearing the whole screen.
                 prefix = "\033[H"
 
             sys.stdout.write(prefix + output + "\033[J")
@@ -219,6 +223,35 @@ class TerminalUI:
             self._ansi(self.MAGENTA, brand),
         ]
 
+    def welcome(self):
+        self._show_cursor()
+        self.first_draw = True
+        width = self._terminal_width()
+        title, brand = self._brand_lines(width)
+
+        lines = [
+            self._border(width),
+            title,
+            brand,
+            self._border(width, "├", "─", "┤"),
+            self._box_line(
+                "Direct • MediaFire • Google Drive • Quick Share",
+                width,
+                "center",
+            ),
+            self._box_line(
+                "Paste a link and let NPL handle the rest.",
+                width,
+                "center",
+            ),
+            self._border(width, "╰", "─", "╯"),
+        ]
+
+        self._render(lines)
+        if self._interactive:
+            sys.stdout.write("\n")
+            sys.stdout.flush()
+
     def _status_panel(self, message, state="active"):
         width = self._terminal_width()
         spinner = ("◐", "◓", "◑", "◒")[
@@ -227,19 +260,19 @@ class TerminalUI:
         self._spinner_index += 1
 
         if state == "done":
-            status = f"✓ READY  {message}"
+            status = f"✓ {message}"
             status_line = self._ansi(
                 self.GREEN,
                 self._box_line(status, width),
             )
         elif state == "error":
-            status = f"! FAILED  {message}"
+            status = f"× {message}"
             status_line = self._ansi(
                 self.RED,
                 self._box_line(status, width),
             )
         else:
-            status = f"{spinner} WORKING  {message}"
+            status = f"{spinner} {message}"
             status_line = self._ansi(
                 self.CYAN,
                 self._box_line(status, width),
@@ -258,23 +291,48 @@ class TerminalUI:
 
         self._render(lines)
 
-    # Compatibility helpers used by test_ui.py and useful for URL resolution.
     def start(self, message="Connecting…"):
+        self._hide_cursor()
         self.first_draw = True
         self._status_panel(message, "active")
 
     def update(self, message):
+        self._hide_cursor()
         self._status_panel(message, "active")
 
-    def stop(self, message="Ready!"):
+    def stop(self, message="Ready"):
         self._status_panel(message, "done")
 
-    def draw(self, filename, downloaded, total, speed, eta):
+    def source_found(self, source):
+        self._hide_cursor()
+        self.first_draw = True
+        self._status_panel(f"SOURCE  {source}", "done")
+
+    def error(self, message):
+        self.first_draw = True
+        self._status_panel(f"FAILED  {message}", "error")
+        self._show_cursor()
+
+    def cancelled(self, message="Download cancelled by user"):
+        self.first_draw = True
+        self._status_panel(f"CANCELLED  {message}", "error")
+        self._show_cursor()
+
+    def draw(
+        self,
+        filename,
+        downloaded,
+        total,
+        speed,
+        eta,
+        source=None,
+        destination=None,
+    ):
+        self._hide_cursor()
+
         now = time.monotonic()
         complete = total > 0 and downloaded >= total
 
-        # A fast connection can call draw hundreds of times per second.
-        # ~12 FPS is visually smooth while keeping terminal overhead tiny.
         interval = self.refresh_interval if self._interactive else 1.0
         if (
             not complete
@@ -307,10 +365,7 @@ class TerminalUI:
                 self._spinner_index % 4
             ]
             self._spinner_index += 1
-            bar = (
-                f"{spinner} "
-                + ("░" * max(0, bar_width - 2))
-            )
+            bar = f"{spinner} receiving"
 
         size_text = (
             self._format_size(total)
@@ -349,14 +404,33 @@ class TerminalUI:
             brand,
             self._border(width, "├", "─", "┤"),
             status_line,
+        ]
+
+        if source:
+            lines.append(
+                self._box_line(f"Source  {source}", width)
+            )
+
+        lines.extend([
             self._box_line(
-                f"File  {filename_text}",
+                f"File    {filename_text}",
                 width,
             ),
             self._box_line(
-                f"Size  {size_text}",
+                f"Size    {size_text}",
                 width,
             ),
+        ])
+
+        if destination:
+            lines.append(
+                self._box_line(
+                    f"Save    {destination}",
+                    width,
+                )
+            )
+
+        lines.extend([
             self._box_line("", width),
             self._box_line(
                 f"{bar} {percent_text}",
@@ -378,11 +452,18 @@ class TerminalUI:
             self._border(width, "├", "─", "┤"),
             self._box_line("Ctrl+C  Cancel", width),
             self._border(width, "╰", "─", "╯"),
-        ]
+        ])
 
         self._render(lines)
 
-    def finish(self, filename):
+    def finish(
+        self,
+        filename,
+        size=None,
+        elapsed=None,
+        avg_speed=None,
+        source=None,
+    ):
         width = self._terminal_width()
         inner = max(1, width - 4)
         saved_as = self._truncate(
@@ -403,18 +484,46 @@ class TerminalUI:
             self._border(width),
             title,
             self._border(width, "├", "─", "┤"),
+        ]
+
+        if source:
+            lines.append(
+                self._box_line(f"Source    {source}", width)
+            )
+
+        lines.append(
             self._box_line(
                 f"Saved as  {saved_as}",
                 width,
-            ),
+            )
+        )
+
+        details = []
+        if size is not None:
+            details.append(self._format_size(size))
+        if elapsed is not None:
+            details.append(self._format_eta(elapsed))
+        if avg_speed is not None:
+            details.append(self._format_speed(avg_speed))
+
+        if details:
+            lines.append(
+                self._box_line(
+                    "  •  ".join(details),
+                    width,
+                )
+            )
+
+        lines.extend([
             self._box_line(
                 "Download finished successfully.",
                 width,
             ),
             self._border(width, "╰", "─", "╯"),
-        ]
+        ])
 
         self._render(lines)
+        self._show_cursor()
 
         if self._interactive:
             sys.stdout.write("\n")
