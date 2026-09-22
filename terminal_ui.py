@@ -254,7 +254,14 @@ class TerminalUI:
             sys.stdout.write("\n")
             sys.stdout.flush()
 
-    def choose_asset(self, release_name, assets):
+    def choose_asset(
+        self,
+        release_name,
+        assets,
+        heading="◆ GITHUB RELEASE",
+        subject_label="Release",
+        prompt="Choose the release asset to download.",
+    ):
         self._show_cursor()
         self.first_draw = True
 
@@ -270,12 +277,13 @@ class TerminalUI:
             self._ansi(
                 self.CYAN,
                 self._box_line(
-                    "◆ GITHUB RELEASE",
+                    heading,
                     width,
                 ),
             ),
             self._box_line(
-                f"Release  {self._truncate(release_name, max(8, inner - 9))}",
+                f"{subject_label}  "
+                f"{self._truncate(release_name, max(8, inner - len(subject_label) - 4))}",
                 width,
             ),
             self._border(width, "├", "─", "┤"),
@@ -296,7 +304,7 @@ class TerminalUI:
         lines.extend([
             self._border(width, "├", "─", "┤"),
             self._box_line(
-                "Choose the release asset to download.",
+                prompt,
                 width,
             ),
             self._border(width, "╰", "─", "╯"),
