@@ -42,6 +42,17 @@ class GitHubReleaseTests(unittest.TestCase):
         self.assertEqual(info["kind"], "asset")
         self.assertEqual(info["asset_url"], url)
 
+    def test_latest_direct_asset_url(self):
+        url = (
+            "https://github.com/owner/project/releases/"
+            "latest/download/app.zip"
+        )
+        info = self.github._parse_github_url(url)
+
+        self.assertEqual(info["kind"], "asset")
+        self.assertEqual(info["tag"], "latest")
+        self.assertEqual(info["asset_url"], url)
+
     def test_release_assets_excludes_missing_urls(self):
         release = {
             "assets": [
