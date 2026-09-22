@@ -1,21 +1,19 @@
 import json
 import re
 
-import requests
-
 from downloaders.direct import DirectDownloader
 
 
 class QuickShare:
     def __init__(self):
-        self.session = requests.Session()
         self.downloader = DirectDownloader(
             source_name="Samsung Quick Share"
         )
 
     def download(self, url):
-        html = self.session.get(
+        response = self.downloader._request(
             url,
+            stream=False,
             headers={
                 "User-Agent": (
                     "Mozilla/5.0 (Linux; Android 16; SM-S911B) "
@@ -23,8 +21,13 @@ class QuickShare:
                     "Chrome/138.0 Mobile Safari/537.36"
                 )
             },
-            timeout=30,
-        ).text
+        )
+        response.raise_for_status()
+
+        try:
+            html = response.text
+        finally:
+            response.close()
 
         match = re.search(
             r'options\.sharedatacontents\s*=\s*JSON\.parse\(\'(.*?)\'\);',
