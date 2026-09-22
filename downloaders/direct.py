@@ -32,8 +32,13 @@ class DirectDownloader:
         ".torrent",
     )
 
-    def __init__(self, chunk_size=1024 * 256):
+    def __init__(
+        self,
+        chunk_size=1024 * 256,
+        source_name="Direct URL",
+    ):
         self.chunk_size = chunk_size
+        self.source_name = source_name
         self.ui = TerminalUI()
         self.session = requests.Session()
         self.session.headers.update(
@@ -59,8 +64,6 @@ class DirectDownloader:
         if filename:
             return filename.group(1).strip()
 
-        # Prefer the final URL after redirects so the saved name matches
-        # the actual file whenever the host redirects to one.
         source_url = response.url or url
         name = os.path.basename(
             urlparse(source_url).path
@@ -69,15 +72,6 @@ class DirectDownloader:
         return unquote(name) if name else "download"
 
     def _download_dir(self):
-        """
-        Pick a writable download directory.
-
-        Priority:
-        1. UNIVERSAL_DOWNLOADER_DIR environment override
-        2. Mounted BUILD_DRIVE on Linux
-        3. Android/Termux Downloads
-        4. ~/Downloads fallback
-        """
         override = os.environ.get("UNIVERSAL_DOWNLOADER_DIR")
 
         if override:
@@ -100,7 +94,6 @@ class DirectDownloader:
             )
 
             if build_drive is not None:
-                # Keep large ROM/ISO downloads off the system disk.
                 download_dir = build_drive / "Downloads"
             else:
                 android_downloads = Path(
@@ -137,12 +130,6 @@ class DirectDownloader:
         )
 
     def _resolve_html_download(self, page_url, html):
-        """
-        Extract the most likely real download URL from an HTML landing page.
-
-        This handles pages that auto-start a download in the browser or show
-        links such as "click here if the download doesn't start".
-        """
         soup = BeautifulSoup(html, "html.parser")
         candidates = []
 
@@ -197,7 +184,6 @@ class DirectDownloader:
 
             add_candidate(href, score)
 
-        # Some sites put the real download URL only inside JavaScript.
         url_pattern = re.compile(
             r'https?://[^\s\'"<>]+',
             flags=re.IGNORECASE,
@@ -216,7 +202,6 @@ class DirectDownloader:
 
         best_score, best_url = candidates[0]
 
-        # Do not guess from weak navigation links.
         if best_score < 60:
             return None
 
@@ -260,7 +245,6 @@ class DirectDownloader:
         if not is_html:
             return response
 
-        # HTML landing pages are small enough to inspect before downloading.
         html = response.text
         page_url = response.url or url
         response.close()
@@ -290,7 +274,6 @@ class DirectDownloader:
         response = self._open_download(url)
 
         filename = self._filename(response, url)
-
         download_dir = self._download_dir()
         filepath = download_dir / filename
 
@@ -304,28 +287,41 @@ class DirectDownloader:
         downloaded = 0
 
         start_time = time.time()
+        sample_time = start_time
+        sample_bytes = 0
+        smoothed_speed = None
 
         with open(filepath, "wb") as f:
             for chunk in response.iter_content(
                 self.chunk_size
             ):
-
                 if not chunk:
                     continue
 
                 f.write(chunk)
                 downloaded += len(chunk)
 
-                elapsed = max(
-                    time.time() - start_time,
-                    0.001,
-                )
+                now = time.time()
+                sample_elapsed = max(now - sample_time, 0.001)
+                sample_delta = downloaded - sample_bytes
+                instant_speed = sample_delta / sample_elapsed
 
-                speed = downloaded / elapsed
+                if smoothed_speed is None:
+                    smoothed_speed = instant_speed
+                else:
+                    # Calm speed/ETA readout without making it feel laggy.
+                    alpha = 0.18
+                    smoothed_speed = (
+                        alpha * instant_speed
+                        + (1 - alpha) * smoothed_speed
+                    )
 
-                if speed > 0 and total > 0:
+                sample_time = now
+                sample_bytes = downloaded
+
+                if smoothed_speed > 0 and total > 0:
                     eta = int(
-                        (total - downloaded) / speed
+                        (total - downloaded) / smoothed_speed
                     )
                 else:
                     eta = 0
@@ -334,9 +330,23 @@ class DirectDownloader:
                     filename,
                     downloaded,
                     total,
-                    speed / 1024 / 1024,
+                    smoothed_speed / 1024 / 1024,
                     eta,
+                    source=self.source_name,
+                    destination=str(download_dir),
                 )
 
         response.close()
-        self.ui.finish(str(filepath))
+
+        elapsed = max(time.time() - start_time, 0.001)
+        avg_speed = (
+            downloaded / elapsed / 1024 / 1024
+        )
+
+        self.ui.finish(
+            str(filepath),
+            size=downloaded,
+            elapsed=elapsed,
+            avg_speed=avg_speed,
+            source=self.source_name,
+        )
