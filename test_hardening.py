@@ -1,8 +1,10 @@
+import io
 import unittest
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import downloader
+import terminal_ui
 from downloaders.direct import DirectDownloader
 
 
@@ -79,6 +81,36 @@ class FilenameSafetyTests(unittest.TestCase):
 
         self.assertLessEqual(len(safe), 240)
         self.assertTrue(safe.endswith(".tar.gz"))
+
+
+
+
+class TerminalPanelTests(unittest.TestCase):
+    def test_error_panel_finishes_with_newline(self):
+        ui = terminal_ui.TerminalUI()
+        ui._interactive = True
+        ui._color = False
+        ui._render = MagicMock()
+        ui._show_cursor = MagicMock()
+        stream = io.StringIO()
+
+        with patch.object(terminal_ui.sys, "stdout", stream):
+            ui.error("boom")
+
+        self.assertEqual(stream.getvalue(), "\n")
+
+    def test_cancelled_panel_finishes_with_newline(self):
+        ui = terminal_ui.TerminalUI()
+        ui._interactive = True
+        ui._color = False
+        ui._render = MagicMock()
+        ui._show_cursor = MagicMock()
+        stream = io.StringIO()
+
+        with patch.object(terminal_ui.sys, "stdout", stream):
+            ui.cancelled()
+
+        self.assertEqual(stream.getvalue(), "\n")
 
 
 class ExitCodeTests(unittest.TestCase):
