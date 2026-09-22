@@ -2,55 +2,45 @@ from downloaders.direct import DirectDownloader
 from downloaders.gdrive import GoogleDrive
 from downloaders.mediafire import MediaFire
 from downloaders.quickshare import QuickShare
+from terminal_ui import TerminalUI
 
 
-APP_NAME = "Universal Downloader"
-AUTHOR = "NPL🇳🇵ROM™"
-VERSION = "2.0"
+def detect_source(url):
+    lowered = url.lower()
 
+    if "drive.google.com" in lowered:
+        return "Google Drive", GoogleDrive
 
-def banner():
-    print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-    print()
-    print(f"          {APP_NAME}")
-    print(f"             by {AUTHOR}")
-    print(f"                  v{VERSION}")
-    print()
-    print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-    print()
+    if "mediafire.com" in lowered:
+        return "MediaFire", MediaFire
+
+    if "quickshare.samsungcloud.com" in lowered:
+        return "Samsung Quick Share", QuickShare
+
+    return "Direct URL", DirectDownloader
 
 
 def main():
-    banner()
-
-    url = input("🔗 Paste URL : ").strip()
-
-    print()
-    print("🔍 Detecting source...")
-    print()
+    ui = TerminalUI()
+    ui.welcome()
 
     try:
-        if "drive.google.com" in url:
-            print("✅ Google Drive detected\n")
-            GoogleDrive().download(url)
+        url = input("Paste URL  ›  ").strip()
 
-        elif "mediafire.com" in url:
-            print("✅ MediaFire detected\n")
-            MediaFire().download(url)
+        if not url:
+            ui.error("No URL entered")
+            return
 
-        elif "quickshare.samsungcloud.com" in url:
-            print("✅ Samsung Quick Share detected\n")
-            QuickShare().download(url)
+        source_name, downloader_cls = detect_source(url)
+        ui.source_found(source_name)
 
-        else:
-            print("✅ Direct URL detected\n")
-            DirectDownloader().download(url)
+        downloader_cls().download(url)
 
     except KeyboardInterrupt:
-        print("\n❌ Download cancelled by user.")
+        ui.cancelled()
 
-    except Exception as e:
-        print(f"\n❌ Error: {e}")
+    except Exception as exc:
+        ui.error(str(exc))
 
 
 if __name__ == "__main__":
