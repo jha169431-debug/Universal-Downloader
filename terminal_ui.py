@@ -400,15 +400,22 @@ class TerminalUI:
             "active",
         )
 
+    def _finish_status_panel(self):
+        self._show_cursor()
+
+        if self._interactive:
+            sys.stdout.write("\n")
+            sys.stdout.flush()
+
     def error(self, message):
         self.first_draw = True
         self._status_panel(f"FAILED  {message}", "error")
-        self._show_cursor()
+        self._finish_status_panel()
 
     def cancelled(self, message="Download cancelled by user"):
         self.first_draw = True
         self._status_panel(f"CANCELLED  {message}", "error")
-        self._show_cursor()
+        self._finish_status_panel()
 
     def draw(
         self,

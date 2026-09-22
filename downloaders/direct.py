@@ -62,6 +62,38 @@ class DirectDownloader:
             }
         )
 
+    def _sanitize_filename(self, value):
+        """
+        Return a safe single path component for a remote filename.
+
+        Servers control Content-Disposition, so never allow a supplied
+        filename to escape the selected download directory. Backslashes are
+        normalized too so Windows-style traversal cannot become a filename
+        surprise on Linux and vice versa.
+        """
+        value = unquote(str(value or ""))
+        value = value.replace("\\", "/")
+        value = value.rsplit("/", 1)[-1]
+        value = re.sub(r"[\x00-\x1f\x7f]", "_", value)
+        value = value.strip().rstrip(" .")
+
+        if value in {"", ".", ".."}:
+            return "download"
+
+        # Keep headroom for the temporary ".part" suffix and common
+        # filesystem component limits.
+        if len(value) > 240:
+            suffixes = "".join(Path(value).suffixes)
+            suffixes = suffixes[-32:]
+
+            if suffixes and len(suffixes) < 40:
+                stem_limit = max(1, 240 - len(suffixes))
+                value = value[:stem_limit] + suffixes
+            else:
+                value = value[:240]
+
+        return value
+
     def _filename(self, response, url):
         cd = response.headers.get("Content-Disposition", "")
 
@@ -71,7 +103,9 @@ class DirectDownloader:
             flags=re.IGNORECASE,
         )
         if filename_star:
-            return unquote(filename_star.group(1)).strip('"')
+            return self._sanitize_filename(
+                filename_star.group(1).strip('"')
+            )
 
         filename = re.search(
             r'filename="?([^";]+)"?',
@@ -79,14 +113,18 @@ class DirectDownloader:
             flags=re.IGNORECASE,
         )
         if filename:
-            return filename.group(1).strip()
+            return self._sanitize_filename(
+                filename.group(1).strip()
+            )
 
         source_url = response.url or url
         name = os.path.basename(
             urlparse(source_url).path
         )
 
-        return unquote(name) if name else "download"
+        return self._sanitize_filename(
+            name or "download"
+        )
 
     def _download_dir(self):
         override = os.environ.get("UNIVERSAL_DOWNLOADER_DIR")
