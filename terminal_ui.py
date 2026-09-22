@@ -7,7 +7,7 @@ import time
 class TerminalUI:
     """Small, dependency-free terminal UI for Universal Downloader."""
 
-    VERSION = "4.0"
+    VERSION = "4.1"
 
     RESET = "\033[0m"
     BOLD = "\033[1m"
@@ -115,20 +115,25 @@ class TerminalUI:
         return f"│ {body} │"
 
     def _progress_bar(self, percent, width):
+        """Render a smoother progress bar with 1/8-cell precision."""
         width = max(6, width)
         percent = max(0.0, min(percent, 100.0))
-        filled = int(width * percent / 100)
 
-        if filled >= width:
-            return "█" * width
+        progress = width * percent / 100.0
+        full = int(progress)
+        fraction = progress - full
 
-        if filled <= 0:
-            return "▶" + ("─" * (width - 1))
+        partial_blocks = ("", "▏", "▎", "▍", "▌", "▋", "▊", "▉")
+        partial_index = int(fraction * 8)
+        partial = partial_blocks[partial_index]
+
+        used = full + (1 if partial else 0)
+        empty = max(0, width - used)
 
         return (
-            ("█" * filled)
-            + "▶"
-            + ("─" * max(0, width - filled - 1))
+            ("█" * full)
+            + partial
+            + ("░" * empty)
         )
 
     def _render(self, lines):
@@ -232,10 +237,10 @@ class TerminalUI:
 
         if known_total:
             percent = min(downloaded * 100 / total, 100.0)
-            percent_text = f"{percent:6.2f}%"
+            percent_text = f"{percent:5.1f}%"
         else:
             percent = 0.0
-            percent_text = "  --.--%"
+            percent_text = "  --.-%"
 
         bar_width = max(
             6,
@@ -251,7 +256,7 @@ class TerminalUI:
             self._spinner_index += 1
             bar = (
                 f"{spinner} "
-                + ("─" * max(0, bar_width - 2))
+                + ("░" * max(0, bar_width - 2))
             )
 
         size_text = (
