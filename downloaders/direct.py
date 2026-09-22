@@ -1,5 +1,7 @@
 import os
 import time
+from pathlib import Path
+
 import requests
 
 from terminal_ui import TerminalUI
@@ -16,9 +18,72 @@ class DirectDownloader:
         if cd and "filename=" in cd:
             return cd.split("filename=")[-1].strip('"')
 
-        name = os.path.basename(url.split("?")[0])
+        # Prefer the final URL after redirects so the saved name matches
+        # the actual file whenever the host redirects to one.
+        source_url = response.url or url
+        name = os.path.basename(source_url.split("?")[0])
 
         return name if name else "download"
+
+    def _download_dir(self):
+        """
+        Pick a writable download directory.
+
+        Priority:
+        1. UNIVERSAL_DOWNLOADER_DIR environment override
+        2. Mounted BUILD_DRIVE on Linux
+        3. Android/Termux Downloads
+        4. ~/Downloads fallback
+        """
+        override = os.environ.get("UNIVERSAL_DOWNLOADER_DIR")
+
+        if override:
+            download_dir = Path(override).expanduser()
+        else:
+            username = os.environ.get("USER") or Path.home().name
+
+            build_drive_candidates = (
+                Path("/run/media") / username / "BUILD_DRIVE",
+                Path("/media") / username / "BUILD_DRIVE",
+            )
+
+            build_drive = next(
+                (
+                    path
+                    for path in build_drive_candidates
+                    if path.is_dir()
+                ),
+                None,
+            )
+
+            if build_drive is not None:
+                # Keep large ROM/ISO downloads off the system disk.
+                download_dir = build_drive / "Downloads"
+            else:
+                android_downloads = Path(
+                    "/storage/emulated/0/Download"
+                )
+
+                if (
+                    android_downloads.parent.exists()
+                    and os.access(
+                        android_downloads.parent,
+                        os.W_OK,
+                    )
+                ):
+                    download_dir = android_downloads
+                else:
+                    download_dir = Path.home() / "Downloads"
+
+        download_dir.mkdir(parents=True, exist_ok=True)
+
+        if not os.access(download_dir, os.W_OK):
+            raise PermissionError(
+                f"Download directory is not writable: "
+                f"{download_dir}"
+            )
+
+        return download_dir
 
     def download(self, url):
         response = requests.get(
@@ -34,10 +99,8 @@ class DirectDownloader:
 
         filename = self._filename(response, url)
 
-        # Save to Android Downloads folder
-        download_dir = "/storage/emulated/0/Download"
-        os.makedirs(download_dir, exist_ok=True)
-        filepath = os.path.join(download_dir, filename)
+        download_dir = self._download_dir()
+        filepath = download_dir / filename
 
         total = int(response.headers.get("Content-Length", 0))
         downloaded = 0
@@ -57,7 +120,7 @@ class DirectDownloader:
 
                 speed = downloaded / elapsed
 
-                if speed > 0:
+                if speed > 0 and total > 0:
                     eta = int((total - downloaded) / speed)
                 else:
                     eta = 0
@@ -70,4 +133,4 @@ class DirectDownloader:
                     eta
                 )
 
-        self.ui.finish(filepath)
+        self.ui.finish(str(filepath))
