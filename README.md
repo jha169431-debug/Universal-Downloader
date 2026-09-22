@@ -12,6 +12,7 @@ Universal Downloader supports downloading files from multiple services through a
 - ✅ Google Drive Support
 - ✅ MediaFire Support
 - ✅ Samsung Quick Share Support
+- ✅ GitHub Releases Support
 - ✅ Live Progress Bar
 - ✅ Human-readable Download Speed
 - ✅ Human-readable ETA
@@ -36,6 +37,7 @@ UniversalDownloader/
 └── downloaders/
     ├── direct.py
     ├── gdrive.py
+    ├── github.py
     ├── mediafire.py
     └── quickshare.py
 ```
@@ -66,6 +68,12 @@ sudo apt update
 sudo apt install -y python3-venv
 ```
 
+### GitHub Releases
+
+Paste a repository, release page, tagged release, or direct release asset URL. Repository/release pages resolve through the GitHub Releases API and multiple assets are shown in an in-terminal picker. Binary packages are listed ahead of checksum/signature metadata.
+
+Public repositories work without authentication. If GitHub API rate limits are reached, set `GITHUB_TOKEN` or `GH_TOKEN` before launching the downloader.
+
 ### Preview the terminal UI
 
 The UI itself uses only Python's standard library, so the v4 preview can be tested without installing downloader dependencies:
@@ -84,7 +92,7 @@ python3 test_ui.py
 - ✅ Resume downloads
 - ✅ Better terminal UI
 - PixelDrain support
-- GitHub Releases support
+- ✅ GitHub Releases support
 
 ### v0.3
 - ✅ Automatic retry / network recovery

@@ -237,7 +237,7 @@ class TerminalUI:
             brand,
             self._border(width, "├", "─", "┤"),
             self._box_line(
-                "Direct • MediaFire • Google Drive • Quick Share",
+                "Direct • MediaFire • GitHub • Google Drive • Quick Share",
                 width,
                 "center",
             ),
@@ -253,6 +253,80 @@ class TerminalUI:
         if self._interactive:
             sys.stdout.write("\n")
             sys.stdout.flush()
+
+    def choose_asset(self, release_name, assets):
+        self._show_cursor()
+        self.first_draw = True
+
+        width = self._terminal_width()
+        inner = max(1, width - 4)
+        title, brand = self._brand_lines(width)
+
+        lines = [
+            self._border(width),
+            title,
+            brand,
+            self._border(width, "├", "─", "┤"),
+            self._ansi(
+                self.CYAN,
+                self._box_line(
+                    "◆ GITHUB RELEASE",
+                    width,
+                ),
+            ),
+            self._box_line(
+                f"Release  {self._truncate(release_name, max(8, inner - 9))}",
+                width,
+            ),
+            self._border(width, "├", "─", "┤"),
+        ]
+
+        for index, asset in enumerate(assets, start=1):
+            name = asset.get("name", "asset")
+            size = self._format_size(
+                asset.get("size", 0)
+            )
+            lines.append(
+                self._box_line(
+                    f"{index:>2}. {name}  •  {size}",
+                    width,
+                )
+            )
+
+        lines.extend([
+            self._border(width, "├", "─", "┤"),
+            self._box_line(
+                "Choose the release asset to download.",
+                width,
+            ),
+            self._border(width, "╰", "─", "╯"),
+        ])
+
+        self._render(lines)
+
+        if self._interactive:
+            sys.stdout.write("\n")
+            sys.stdout.flush()
+
+        while True:
+            try:
+                raw = input("Select asset  ›  ").strip()
+            except EOFError as exc:
+                raise RuntimeError(
+                    "Multiple GitHub assets found, but no "
+                    "interactive selection is available."
+                ) from exc
+
+            if raw.isdigit():
+                selected = int(raw)
+
+                if 1 <= selected <= len(assets):
+                    self._hide_cursor()
+                    return assets[selected - 1]
+
+            print(
+                f"Choose a number from 1 to {len(assets)}."
+            )
 
     def _status_panel(self, message, state="active"):
         width = self._terminal_width()
