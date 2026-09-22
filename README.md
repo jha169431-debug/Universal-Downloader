@@ -16,6 +16,9 @@ Universal Downloader supports downloading files from multiple services through a
 - ✅ Human-readable Download Speed
 - ✅ Human-readable ETA
 - ✅ Automatic Filename Detection
+- ✅ Resumable HTTP Downloads
+- ✅ Safe `.part` Files Until Completion
+- ✅ BUILD_DRIVE Auto-detection on Linux
 - ✅ Modular Architecture
 
 ---
@@ -75,8 +78,8 @@ python3 test_ui.py
 ## 🛣️ Roadmap
 
 ### v0.2
-- Resume downloads
-- Better terminal UI
+- ✅ Resume downloads
+- ✅ Better terminal UI
 - PixelDrain support
 - GitHub Releases support
 
