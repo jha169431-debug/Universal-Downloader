@@ -7,7 +7,7 @@ import time
 class TerminalUI:
     """Small, dependency-free terminal UI for Universal Downloader."""
 
-    VERSION = "4.3"
+    VERSION = "4.4"
 
     RESET = "\033[0m"
     BOLD = "\033[1m"
@@ -116,34 +116,37 @@ class TerminalUI:
 
     def _progress_bar(self, percent, width):
         """
-        Render the real progress plus a bead-like caterpillar animation.
+        Ball-only progress bar with a caterpillar made from round beads.
 
-        The caterpillar only crawls across the completed portion, so the
-        animation never pretends that more data has downloaded than it has.
+        Filled progress uses solid balls, remaining progress uses hollow
+        balls, and the animated bead cluster appears once enough progress
+        exists for it to crawl naturally.
         """
         width = max(6, width)
         percent = max(0.0, min(percent, 100.0))
 
         progress = width * percent / 100.0
         full = int(progress)
+
+        # Ball-only base: no block characters at all.
+        cells = [
+            "●" if index < full else "○"
+            for index in range(width)
+        ]
+
+        # Show a small leading bead for fractional progress so the bar still
+        # feels smooth even before the next whole cell is completed.
         fraction = progress - full
+        if (
+            0 < fraction
+            and full < width
+            and percent < 100
+        ):
+            cells[full] = "◌"
 
-        partial_blocks = ("", "▏", "▎", "▍", "▌", "▋", "▊", "▉")
-        partial_index = int(fraction * 8)
-        partial = partial_blocks[partial_index]
-
-        used = full + (1 if partial else 0)
-        empty = max(0, width - used)
-
-        cells = list(
-            ("█" * full)
-            + partial
-            + ("░" * empty)
-        )
-
-        # Five round "segments" crawl as one body. The head and body
-        # subtly pulse between frames to make it feel less like a slider.
-        if 0 < percent < 100 and full >= 4:
+        # Let the real progress establish itself first. Once six completed
+        # cells exist, a 5-bead caterpillar starts crawling through them.
+        if 0 < percent < 100 and full >= 6:
             tick = int(time.monotonic() * 10)
 
             poses = (
@@ -155,8 +158,6 @@ class TerminalUI:
             )
             pose = poses[tick % len(poses)]
 
-            # Let the body enter from the left and disappear naturally at
-            # the right edge of the downloaded region before looping.
             travel = full + len(pose)
             start = (
                 (tick // 2) % travel
