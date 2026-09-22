@@ -11,6 +11,19 @@ from terminal_ui import TerminalUI
 
 
 class DirectDownloader:
+    RETRYABLE_STATUS = {
+        408,
+        425,
+        429,
+        500,
+        502,
+        503,
+        504,
+    }
+    MAX_RETRIES = 5
+    MAX_BACKOFF = 16
+    REQUEST_TIMEOUT = (10, 30)
+
     FILE_EXTENSIONS = (
         ".iso",
         ".img",
@@ -125,6 +138,91 @@ class DirectDownloader:
 
         return download_dir
 
+    def _retry_delay(self, retry_number, response=None):
+        if response is not None:
+            retry_after = response.headers.get("Retry-After")
+
+            if retry_after:
+                try:
+                    return min(
+                        max(float(retry_after), 0.0),
+                        self.MAX_BACKOFF,
+                    )
+                except ValueError:
+                    pass
+
+        return min(
+            2 ** max(retry_number - 1, 0),
+            self.MAX_BACKOFF,
+        )
+
+    def _request(
+        self,
+        url,
+        *,
+        headers=None,
+        stream=True,
+        allow_redirects=True,
+    ):
+        """
+        Make a GET request with bounded exponential backoff.
+
+        This covers connection failures, timeouts and transient HTTP
+        responses before a stream begins. Mid-stream recovery is handled
+        separately with HTTP Range so downloaded bytes are not discarded.
+        """
+        last_error = None
+
+        for attempt in range(self.MAX_RETRIES + 1):
+            try:
+                response = self.session.get(
+                    url,
+                    stream=stream,
+                    allow_redirects=allow_redirects,
+                    headers=headers or {},
+                    timeout=self.REQUEST_TIMEOUT,
+                )
+            except requests.RequestException as exc:
+                last_error = exc
+
+                if attempt >= self.MAX_RETRIES:
+                    raise
+
+                retry_number = attempt + 1
+                delay = self._retry_delay(retry_number)
+                self.ui.update(
+                    f"Network retry {retry_number}/"
+                    f"{self.MAX_RETRIES} in {delay:g}s…"
+                )
+                time.sleep(delay)
+                continue
+
+            if (
+                response.status_code
+                in self.RETRYABLE_STATUS
+                and attempt < self.MAX_RETRIES
+            ):
+                retry_number = attempt + 1
+                delay = self._retry_delay(
+                    retry_number,
+                    response=response,
+                )
+                response.close()
+
+                self.ui.update(
+                    f"Server retry {retry_number}/"
+                    f"{self.MAX_RETRIES} in {delay:g}s…"
+                )
+                time.sleep(delay)
+                continue
+
+            return response
+
+        if last_error is not None:
+            raise last_error
+
+        raise RuntimeError("Request failed after retries.")
+
     def _looks_like_file_url(self, url):
         path = urlparse(url).path.lower()
 
@@ -223,12 +321,11 @@ class DirectDownloader:
         if referer:
             headers["Referer"] = referer
 
-        response = self.session.get(
+        response = self._request(
             url,
             stream=True,
             allow_redirects=True,
             headers=headers,
-            timeout=30,
         )
         response.raise_for_status()
 
@@ -343,12 +440,11 @@ class DirectDownloader:
         if referer:
             headers["Referer"] = referer
 
-        return self.session.get(
+        return self._request(
             file_url,
             stream=True,
             allow_redirects=True,
             headers=headers,
-            timeout=30,
         )
 
     def download(self, url):
