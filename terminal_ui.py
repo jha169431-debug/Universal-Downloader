@@ -44,10 +44,12 @@ class TerminalUI:
             self._cursor_hidden = True
 
     def _show_cursor(self):
-        if self._interactive and self._cursor_hidden:
+        # Always send the restore sequence. A different TerminalUI instance
+        # may have hidden the shared terminal cursor before an exception.
+        if self._interactive:
             sys.stdout.write("\033[?25h")
             sys.stdout.flush()
-            self._cursor_hidden = False
+        self._cursor_hidden = False
 
     def clear(self):
         if self._interactive:
