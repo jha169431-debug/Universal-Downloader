@@ -7,7 +7,7 @@ import time
 class TerminalUI:
     """Small, dependency-free terminal UI for Universal Downloader."""
 
-    VERSION = "4.2"
+    VERSION = "4.3"
 
     RESET = "\033[0m"
     BOLD = "\033[1m"
@@ -116,10 +116,10 @@ class TerminalUI:
 
     def _progress_bar(self, percent, width):
         """
-        Render a smooth progress bar with a small animated crawler.
+        Render the real progress plus a bead-like caterpillar animation.
 
-        The crawler only travels inside the completed portion, so the
-        actual download percentage stays visually unambiguous.
+        The caterpillar only crawls across the completed portion, so the
+        animation never pretends that more data has downloaded than it has.
         """
         width = max(6, width)
         percent = max(0.0, min(percent, 100.0))
@@ -141,20 +141,26 @@ class TerminalUI:
             + ("░" * empty)
         )
 
-        # Caterpillar/shimmer animation. Two alternating body poses make
-        # the segment look like it is flexing while it crawls forward.
-        if 0 < percent < 100 and full >= 3:
-            tick = int(time.monotonic() * 12)
+        # Five round "segments" crawl as one body. The head and body
+        # subtly pulse between frames to make it feel less like a slider.
+        if 0 < percent < 100 and full >= 4:
+            tick = int(time.monotonic() * 10)
+
             poses = (
-                ("▓", "▒", "▓"),
-                ("▒", "▓", "▒"),
+                ("◉", "●", "●", "●", "●"),
+                ("●", "◉", "●", "●", "●"),
+                ("●", "●", "◉", "●", "●"),
+                ("●", "●", "●", "◉", "●"),
+                ("●", "●", "●", "●", "◉"),
             )
             pose = poses[tick % len(poses)]
 
-            travel = full + len(pose) - 1
+            # Let the body enter from the left and disappear naturally at
+            # the right edge of the downloaded region before looping.
+            travel = full + len(pose)
             start = (
                 (tick // 2) % travel
-            ) - (len(pose) - 1)
+            ) - len(pose)
 
             for offset, glyph in enumerate(pose):
                 index = start + offset
