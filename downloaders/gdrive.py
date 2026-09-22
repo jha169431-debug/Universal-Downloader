@@ -8,9 +8,10 @@ from downloaders.direct import DirectDownloader
 
 
 class GoogleDrive:
-    def __init__(self):
+    def __init__(self, checksum=None):
         self.helper = DirectDownloader(
-            source_name="Google Drive"
+            source_name="Google Drive",
+            checksum=checksum,
         )
 
     def download(self, url):
@@ -48,10 +49,21 @@ class GoogleDrive:
         elapsed = max(time.time() - started, 0.001)
         avg_speed = size / elapsed / 1024 / 1024
 
+        actual_checksum = self.helper._verify_checksum(
+            output_path,
+            display_name=output_path.name,
+        )
+
         self.helper.ui.finish(
             str(output_path),
             size=size,
             elapsed=elapsed,
             avg_speed=avg_speed,
             source="Google Drive",
+            checksum_label=(
+                self.helper.checksum.label
+                if self.helper.checksum is not None
+                else None
+            ),
+            checksum_digest=actual_checksum,
         )
