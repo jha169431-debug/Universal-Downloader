@@ -7,7 +7,7 @@ import time
 class TerminalUI:
     """Small, dependency-free terminal UI for Universal Downloader."""
 
-    VERSION = "4.1"
+    VERSION = "4.2"
 
     RESET = "\033[0m"
     BOLD = "\033[1m"
@@ -115,7 +115,12 @@ class TerminalUI:
         return f"│ {body} │"
 
     def _progress_bar(self, percent, width):
-        """Render a smoother progress bar with 1/8-cell precision."""
+        """
+        Render a smooth progress bar with a small animated crawler.
+
+        The crawler only travels inside the completed portion, so the
+        actual download percentage stays visually unambiguous.
+        """
         width = max(6, width)
         percent = max(0.0, min(percent, 100.0))
 
@@ -130,11 +135,34 @@ class TerminalUI:
         used = full + (1 if partial else 0)
         empty = max(0, width - used)
 
-        return (
+        cells = list(
             ("█" * full)
             + partial
             + ("░" * empty)
         )
+
+        # Caterpillar/shimmer animation. Two alternating body poses make
+        # the segment look like it is flexing while it crawls forward.
+        if 0 < percent < 100 and full >= 3:
+            tick = int(time.monotonic() * 12)
+            poses = (
+                ("▓", "▒", "▓"),
+                ("▒", "▓", "▒"),
+            )
+            pose = poses[tick % len(poses)]
+
+            travel = full + len(pose) - 1
+            start = (
+                (tick // 2) % travel
+            ) - (len(pose) - 1)
+
+            for offset, glyph in enumerate(pose):
+                index = start + offset
+
+                if 0 <= index < full:
+                    cells[index] = glyph
+
+        return "".join(cells)
 
     def _render(self, lines):
         output = "\n".join(lines)
