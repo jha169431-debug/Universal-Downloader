@@ -11,6 +11,19 @@ from terminal_ui import TerminalUI
 
 
 class DirectDownloader:
+    RETRYABLE_STATUS = {
+        408,
+        425,
+        429,
+        500,
+        502,
+        503,
+        504,
+    }
+    MAX_RETRIES = 5
+    MAX_BACKOFF = 16
+    REQUEST_TIMEOUT = (10, 30)
+
     FILE_EXTENSIONS = (
         ".iso",
         ".img",
@@ -125,6 +138,91 @@ class DirectDownloader:
 
         return download_dir
 
+    def _retry_delay(self, retry_number, response=None):
+        if response is not None:
+            retry_after = response.headers.get("Retry-After")
+
+            if retry_after:
+                try:
+                    return min(
+                        max(float(retry_after), 0.0),
+                        self.MAX_BACKOFF,
+                    )
+                except ValueError:
+                    pass
+
+        return min(
+            2 ** max(retry_number - 1, 0),
+            self.MAX_BACKOFF,
+        )
+
+    def _request(
+        self,
+        url,
+        *,
+        headers=None,
+        stream=True,
+        allow_redirects=True,
+    ):
+        """
+        Make a GET request with bounded exponential backoff.
+
+        This covers connection failures, timeouts and transient HTTP
+        responses before a stream begins. Mid-stream recovery is handled
+        separately with HTTP Range so downloaded bytes are not discarded.
+        """
+        last_error = None
+
+        for attempt in range(self.MAX_RETRIES + 1):
+            try:
+                response = self.session.get(
+                    url,
+                    stream=stream,
+                    allow_redirects=allow_redirects,
+                    headers=headers or {},
+                    timeout=self.REQUEST_TIMEOUT,
+                )
+            except requests.RequestException as exc:
+                last_error = exc
+
+                if attempt >= self.MAX_RETRIES:
+                    raise
+
+                retry_number = attempt + 1
+                delay = self._retry_delay(retry_number)
+                self.ui.update(
+                    f"Network retry {retry_number}/"
+                    f"{self.MAX_RETRIES} in {delay:g}s…"
+                )
+                time.sleep(delay)
+                continue
+
+            if (
+                response.status_code
+                in self.RETRYABLE_STATUS
+                and attempt < self.MAX_RETRIES
+            ):
+                retry_number = attempt + 1
+                delay = self._retry_delay(
+                    retry_number,
+                    response=response,
+                )
+                response.close()
+
+                self.ui.update(
+                    f"Server retry {retry_number}/"
+                    f"{self.MAX_RETRIES} in {delay:g}s…"
+                )
+                time.sleep(delay)
+                continue
+
+            return response
+
+        if last_error is not None:
+            raise last_error
+
+        raise RuntimeError("Request failed after retries.")
+
     def _looks_like_file_url(self, url):
         path = urlparse(url).path.lower()
 
@@ -223,12 +321,11 @@ class DirectDownloader:
         if referer:
             headers["Referer"] = referer
 
-        response = self.session.get(
+        response = self._request(
             url,
             stream=True,
             allow_redirects=True,
             headers=headers,
-            timeout=30,
         )
         response.raise_for_status()
 
@@ -343,12 +440,157 @@ class DirectDownloader:
         if referer:
             headers["Referer"] = referer
 
-        return self.session.get(
+        return self._request(
             file_url,
             stream=True,
             allow_redirects=True,
             headers=headers,
-            timeout=30,
+        )
+
+    def _recover_download_response(
+        self,
+        original_url,
+        file_url,
+        offset,
+        referer=None,
+    ):
+        """
+        Reopen a transfer at offset.
+
+        If a signed/direct URL expired, resolve the original share URL again.
+        If the server ignores Range or returns an invalid range, return a
+        fresh full response and tell the caller to restart the .part safely.
+        """
+        response = self._resume_response(
+            file_url,
+            offset,
+            referer=referer,
+        )
+
+        if response.status_code in (401, 403, 404):
+            response.close()
+            self.ui.update("Refreshing download link…")
+
+            fresh, fresh_total = self._fresh_response(
+                original_url
+            )
+            file_url = fresh.url or original_url
+            referer = fresh.request.headers.get("Referer")
+            fresh.close()
+
+            response = self._resume_response(
+                file_url,
+                offset,
+                referer=referer,
+            )
+
+        if response.status_code == 206:
+            start, _, remote_total = self._content_range(
+                response
+            )
+
+            if start != offset:
+                response.close()
+                self.ui.update(
+                    "Range mismatch; restarting safely…"
+                )
+                fresh, fresh_total = self._fresh_response(
+                    original_url
+                )
+                return (
+                    fresh,
+                    fresh_total,
+                    fresh.url or original_url,
+                    fresh.request.headers.get("Referer"),
+                    True,
+                    False,
+                )
+
+            total = (
+                remote_total
+                if remote_total is not None
+                else self._response_total(
+                    response,
+                    resume_from=offset,
+                )
+            )
+            return (
+                response,
+                total,
+                response.url or file_url,
+                response.request.headers.get("Referer")
+                or referer,
+                False,
+                False,
+            )
+
+        if response.status_code == 416:
+            remote_total = self._unsatisfied_total(response)
+            response.close()
+
+            if (
+                remote_total is not None
+                and offset == remote_total
+            ):
+                return (
+                    None,
+                    remote_total,
+                    file_url,
+                    referer,
+                    False,
+                    True,
+                )
+
+            self.ui.update(
+                "Resume rejected; restarting safely…"
+            )
+            fresh, fresh_total = self._fresh_response(
+                original_url
+            )
+            return (
+                fresh,
+                fresh_total,
+                fresh.url or original_url,
+                fresh.request.headers.get("Referer"),
+                True,
+                False,
+            )
+
+        if response.status_code == 200:
+            content_type = response.headers.get(
+                "Content-Type",
+                "",
+            ).lower()
+
+            if "text/html" in content_type:
+                response.close()
+                fresh, fresh_total = self._fresh_response(
+                    original_url
+                )
+                response = fresh
+                total = fresh_total
+            else:
+                total = self._response_total(response)
+
+            return (
+                response,
+                total,
+                response.url or file_url,
+                response.request.headers.get("Referer")
+                or referer,
+                True,
+                False,
+            )
+
+        try:
+            response.raise_for_status()
+        except Exception:
+            response.close()
+            raise
+
+        raise RuntimeError(
+            f"Unexpected resume response: "
+            f"HTTP {response.status_code}"
         )
 
     def download(self, url):
@@ -398,99 +640,48 @@ class DirectDownloader:
             partpath.unlink(missing_ok=True)
             resume_from = 0
 
-        if resume_from > 0:
-            file_url = response.url or url
-            referer = response.request.headers.get("Referer")
-            response.close()
+        file_url = response.url or url
+        referer = response.request.headers.get("Referer")
 
+        if resume_from > 0:
+            response.close()
             self.ui.resume_found(resume_from)
 
-            range_response = self._resume_response(
+            (
+                response,
+                total,
+                file_url,
+                referer,
+                restart,
+                complete,
+            ) = self._recover_download_response(
+                url,
                 file_url,
                 resume_from,
                 referer=referer,
             )
 
-            if range_response.status_code == 416:
-                remote_total = self._unsatisfied_total(
-                    range_response
+            if complete:
+                os.replace(partpath, filepath)
+                self.ui.finish(
+                    str(filepath),
+                    size=resume_from,
+                    elapsed=0,
+                    avg_speed=0,
+                    source=self.source_name,
                 )
-                range_response.close()
+                return
 
-                if (
-                    remote_total is not None
-                    and resume_from == remote_total
-                ):
-                    os.replace(partpath, filepath)
-                    self.ui.finish(
-                        str(filepath),
-                        size=resume_from,
-                        elapsed=0,
-                        avg_speed=0,
-                        source=self.source_name,
-                    )
-                    return
-
+            if restart:
                 self.ui.update(
-                    "Resume rejected; restarting safely…"
+                    "Server cannot resume; restarting safely…"
                 )
                 partpath.unlink(missing_ok=True)
                 resume_from = 0
-                response, total = self._fresh_response(url)
-
-            elif range_response.status_code == 206:
-                start, _, remote_total = self._content_range(
-                    range_response
-                )
-
-                if start != resume_from:
-                    range_response.close()
-                    self.ui.update(
-                        "Resume range mismatch; restarting safely…"
-                    )
-                    partpath.unlink(missing_ok=True)
-                    resume_from = 0
-                    response, total = self._fresh_response(url)
-                else:
-                    response = range_response
-                    total = (
-                        remote_total
-                        if remote_total is not None
-                        else self._response_total(
-                            response,
-                            resume_from=resume_from,
-                        )
-                    )
-
-            elif range_response.status_code == 200:
-                # The server ignored Range. Reuse the full 200 response,
-                # but never append it to the partial file.
-                content_type = range_response.headers.get(
-                    "Content-Type",
-                    "",
-                ).lower()
-
-                if "text/html" in content_type:
-                    range_response.close()
-                    response, total = self._fresh_response(url)
-                else:
-                    response = range_response
-                    total = self._response_total(response)
-
-                self.ui.update(
-                    "Server does not support resume; restarting…"
-                )
-                partpath.unlink(missing_ok=True)
-                resume_from = 0
-
-            else:
-                try:
-                    range_response.raise_for_status()
-                finally:
-                    range_response.close()
 
         downloaded = resume_from
         transferred_this_session = 0
+        recovery_attempts = 0
 
         start_time = time.time()
         sample_time = start_time
@@ -499,67 +690,156 @@ class DirectDownloader:
 
         mode = "ab" if resume_from else "wb"
 
-        try:
-            with open(partpath, mode) as f:
-                for chunk in response.iter_content(
-                    self.chunk_size
-                ):
-                    if not chunk:
-                        continue
+        with open(partpath, mode) as f:
+            while True:
+                stream_error = None
 
-                    f.write(chunk)
-                    downloaded += len(chunk)
-                    transferred_this_session += len(chunk)
-
-                    now = time.time()
-                    sample_elapsed = max(
-                        now - sample_time,
-                        0.001,
-                    )
-                    sample_delta = downloaded - sample_bytes
-                    instant_speed = (
-                        sample_delta / sample_elapsed
-                    )
-
-                    if smoothed_speed is None:
-                        smoothed_speed = instant_speed
-                    else:
-                        alpha = 0.18
-                        smoothed_speed = (
-                            alpha * instant_speed
-                            + (1 - alpha) * smoothed_speed
-                        )
-
-                    sample_time = now
-                    sample_bytes = downloaded
-
-                    if (
-                        smoothed_speed > 0
-                        and total > 0
+                try:
+                    for chunk in response.iter_content(
+                        self.chunk_size
                     ):
-                        eta = int(
-                            (total - downloaded)
-                            / smoothed_speed
-                        )
-                    else:
-                        eta = 0
+                        if not chunk:
+                            continue
 
-                    self.ui.draw(
-                        filename,
-                        downloaded,
-                        total,
-                        smoothed_speed / 1024 / 1024,
-                        eta,
-                        source=self.source_name,
-                        destination=str(download_dir),
-                        resume_from=resume_from,
+                        f.write(chunk)
+                        downloaded += len(chunk)
+                        transferred_this_session += len(chunk)
+
+                        now = time.time()
+                        sample_elapsed = max(
+                            now - sample_time,
+                            0.001,
+                        )
+                        sample_delta = (
+                            downloaded - sample_bytes
+                        )
+                        instant_speed = (
+                            sample_delta / sample_elapsed
+                        )
+
+                        if smoothed_speed is None:
+                            smoothed_speed = instant_speed
+                        else:
+                            alpha = 0.18
+                            smoothed_speed = (
+                                alpha * instant_speed
+                                + (1 - alpha)
+                                * smoothed_speed
+                            )
+
+                        sample_time = now
+                        sample_bytes = downloaded
+
+                        if (
+                            smoothed_speed > 0
+                            and total > 0
+                        ):
+                            eta = int(
+                                (total - downloaded)
+                                / smoothed_speed
+                            )
+                        else:
+                            eta = 0
+
+                        self.ui.draw(
+                            filename,
+                            downloaded,
+                            total,
+                            smoothed_speed
+                            / 1024
+                            / 1024,
+                            eta,
+                            source=self.source_name,
+                            destination=str(
+                                download_dir
+                            ),
+                            resume_from=resume_from,
+                        )
+
+                except requests.RequestException as exc:
+                    stream_error = exc
+
+                finally:
+                    response.close()
+
+                # A normal EOF is completion when the size is unknown,
+                # or when all advertised bytes have arrived.
+                if stream_error is None:
+                    if total <= 0 or downloaded >= total:
+                        break
+
+                recovery_attempts += 1
+
+                if recovery_attempts > self.MAX_RETRIES:
+                    message = (
+                        "Network recovery exhausted after "
+                        f"{self.MAX_RETRIES} attempts. "
+                        f"Partial file kept at: {partpath}"
                     )
 
-                # Flush the completed partial before the atomic rename.
+                    if stream_error is not None:
+                        raise RuntimeError(
+                            message
+                        ) from stream_error
+
+                    raise RuntimeError(message)
+
+                # Persist everything received before attempting a new
+                # connection. This also makes a sudden process exit safer.
                 f.flush()
                 os.fsync(f.fileno())
-        finally:
-            response.close()
+
+                delay = self._retry_delay(
+                    recovery_attempts
+                )
+                self.ui.update(
+                    f"Connection interrupted • recovery "
+                    f"{recovery_attempts}/"
+                    f"{self.MAX_RETRIES} in {delay:g}s…"
+                )
+                time.sleep(delay)
+
+                (
+                    response,
+                    recovered_total,
+                    file_url,
+                    referer,
+                    restart,
+                    complete,
+                ) = self._recover_download_response(
+                    url,
+                    file_url,
+                    downloaded,
+                    referer=referer,
+                )
+
+                if complete:
+                    total = recovered_total
+                    break
+
+                if restart:
+                    self.ui.update(
+                        "Range unavailable; restarting safely…"
+                    )
+                    f.seek(0)
+                    f.truncate(0)
+                    f.flush()
+                    os.fsync(f.fileno())
+
+                    downloaded = 0
+                    resume_from = 0
+
+                total = recovered_total
+
+                # Do not let the pause/reconnect interval distort the
+                # displayed speed or ETA.
+                sample_time = time.time()
+                sample_bytes = downloaded
+                smoothed_speed = None
+
+            # Flush the completed partial before the atomic rename.
+            f.flush()
+            os.fsync(f.fileno())
 
         if total > 0 and downloaded != total:
             raise RuntimeError(

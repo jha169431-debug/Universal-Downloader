@@ -19,6 +19,9 @@ Universal Downloader supports downloading files from multiple services through a
 - ✅ Resumable HTTP Downloads
 - ✅ Safe `.part` Files Until Completion
 - ✅ BUILD_DRIVE Auto-detection on Linux
+- ✅ Automatic Retry + Exponential Backoff
+- ✅ Mid-stream Network Recovery with HTTP Range
+- ✅ Expired Direct-link Refresh
 - ✅ Modular Architecture
 
 ---
@@ -69,7 +72,7 @@ The UI itself uses only Python's standard library, so the v4 preview can be test
 
 ```bash
 git fetch origin
-git switch ui-v4-refresh
+git switch main
 python3 test_ui.py
 ```
 
@@ -84,6 +87,7 @@ python3 test_ui.py
 - GitHub Releases support
 
 ### v0.3
+- ✅ Automatic retry / network recovery
 - Multi-thread downloads
 - Download queue
 - SHA-256 verification
