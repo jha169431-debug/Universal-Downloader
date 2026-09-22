@@ -9,9 +9,10 @@ class MediaFire:
     DirectDownloader resolves the landing page to the real file URL.
     """
 
-    def __init__(self):
+    def __init__(self, checksum=None):
         self.downloader = DirectDownloader(
-            source_name="MediaFire"
+            source_name="MediaFire",
+            checksum=checksum,
         )
 
     def download(self, url):
