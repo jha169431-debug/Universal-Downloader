@@ -5,9 +5,10 @@ from downloaders.direct import DirectDownloader
 
 
 class QuickShare:
-    def __init__(self):
+    def __init__(self, checksum=None):
         self.downloader = DirectDownloader(
-            source_name="Samsung Quick Share"
+            source_name="Samsung Quick Share",
+            checksum=checksum,
         )
 
     def download(self, url):
