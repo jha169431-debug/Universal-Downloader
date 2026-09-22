@@ -1,5 +1,6 @@
 from downloaders.direct import DirectDownloader
 from downloaders.gdrive import GoogleDrive
+from downloaders.github import GitHubRelease
 from downloaders.mediafire import MediaFire
 from downloaders.quickshare import QuickShare
 from terminal_ui import TerminalUI
@@ -7,6 +8,24 @@ from terminal_ui import TerminalUI
 
 def detect_source(url):
     lowered = url.lower()
+
+    if "github.com/" in lowered:
+        from urllib.parse import urlparse
+
+        parts = [
+            part
+            for part in urlparse(url).path.split("/")
+            if part
+        ]
+
+        if (
+            len(parts) == 2
+            or (
+                len(parts) >= 3
+                and parts[2] == "releases"
+            )
+        ):
+            return "GitHub Releases", GitHubRelease
 
     if "drive.google.com" in lowered:
         return "Google Drive", GoogleDrive
