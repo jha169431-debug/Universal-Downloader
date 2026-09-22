@@ -12,6 +12,7 @@ Universal Downloader supports downloading files from multiple services through a
 - ✅ Google Drive Support
 - ✅ MediaFire Support
 - ✅ Samsung Quick Share Support
+- ✅ GitHub Releases Support
 - ✅ Live Progress Bar
 - ✅ Human-readable Download Speed
 - ✅ Human-readable ETA
@@ -36,6 +37,7 @@ UniversalDownloader/
 └── downloaders/
     ├── direct.py
     ├── gdrive.py
+    ├── github.py
     ├── mediafire.py
     └── quickshare.py
 ```
@@ -57,6 +59,28 @@ python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 
 python downloader.py
+```
+
+## 🐙 GitHub Releases
+
+Paste any of these directly into Universal Downloader:
+
+```text
+https://github.com/OWNER/REPO
+https://github.com/OWNER/REPO/releases
+https://github.com/OWNER/REPO/releases/latest
+https://github.com/OWNER/REPO/releases/tag/v1.2.3
+https://github.com/OWNER/REPO/releases/download/v1.2.3/file.zip
+```
+
+Repository and release-page URLs resolve through the GitHub Releases API. If a release has multiple uploaded assets, Universal Downloader shows an interactive asset picker with filenames and sizes. A direct `/releases/download/...` asset URL goes straight into the normal resumable download engine.
+
+Public repositories work without authentication. If GitHub's anonymous API rate limit is reached, export a token before launching:
+
+```bash
+export GITHUB_TOKEN="your_token"
+# or:
+export GH_TOKEN="your_token"
 ```
 
 If `python3 -m venv .venv` reports that venv support is missing:
@@ -84,7 +108,7 @@ python3 test_ui.py
 - ✅ Resume downloads
 - ✅ Better terminal UI
 - PixelDrain support
-- GitHub Releases support
+- ✅ GitHub Releases support
 
 ### v0.3
 - ✅ Automatic retry / network recovery
