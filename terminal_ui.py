@@ -7,7 +7,7 @@ import time
 class TerminalUI:
     """Small, dependency-free terminal UI for Universal Downloader."""
 
-    VERSION = "4.4"
+    VERSION = "4.5"
 
     RESET = "\033[0m"
     BOLD = "\033[1m"
@@ -116,60 +116,53 @@ class TerminalUI:
 
     def _progress_bar(self, percent, width):
         """
-        Ball-only progress bar with a caterpillar made from round beads.
+        Minimal iOS-style cellular-dot progress indicator.
 
-        Filled progress uses solid balls, remaining progress uses hollow
-        balls, and the animated bead cluster appears once enough progress
-        exists for it to crawl naturally.
+        Only downloaded progress is drawn. There is no predicted/empty
+        section. The leading cluster subtly pulses like old iPhone cellular
+        signal pips while the completed dots remain calm behind it.
         """
         width = max(6, width)
         percent = max(0.0, min(percent, 100.0))
 
-        progress = width * percent / 100.0
+        # Because the dots are separated by spaces, use roughly half the
+        # available character width as the number of progress pips.
+        pip_count = max(3, width // 2)
+        progress = pip_count * percent / 100.0
         full = int(progress)
 
-        # Ball-only base: no block characters at all.
-        cells = [
-            "●" if index < full else "○"
-            for index in range(width)
-        ]
+        if percent > 0 and full == 0:
+            full = 1
 
-        # Show a small leading bead for fractional progress so the bar still
-        # feels smooth even before the next whole cell is completed.
-        fraction = progress - full
-        if (
-            0 < fraction
-            and full < width
-            and percent < 100
-        ):
-            cells[full] = "◌"
+        if full <= 0:
+            return "·"
 
-        # Let the real progress establish itself first. Once six completed
-        # cells exist, a 5-bead caterpillar starts crawling through them.
-        if 0 < percent < 100 and full >= 6:
-            tick = int(time.monotonic() * 10)
+        # Old-iPhone-like round cellular pips: nothing is drawn ahead of
+        # actual progress.
+        cells = ["●"] * min(full, pip_count)
+
+        # Animate only the front few pips. The changing dot weights make the
+        # head look like a compact caterpillar / cellular-reception pulse.
+        if 0 < percent < 100 and len(cells) >= 3:
+            tick = int(time.monotonic() * 9)
 
             poses = (
-                ("◉", "●", "●", "●", "●"),
-                ("●", "◉", "●", "●", "●"),
-                ("●", "●", "◉", "●", "●"),
-                ("●", "●", "●", "◉", "●"),
-                ("●", "●", "●", "●", "◉"),
+                ("•", "●", "●", "●"),
+                ("●", "•", "●", "●"),
+                ("●", "●", "•", "●"),
+                ("●", "●", "●", "•"),
             )
             pose = poses[tick % len(poses)]
 
-            travel = full + len(pose)
-            start = (
-                (tick // 2) % travel
-            ) - len(pose)
+            body = min(len(pose), len(cells))
+            start = len(cells) - body
 
-            for offset, glyph in enumerate(pose):
-                index = start + offset
+            for offset in range(body):
+                cells[start + offset] = pose[
+                    len(pose) - body + offset
+                ]
 
-                if 0 <= index < full:
-                    cells[index] = glyph
-
-        return "".join(cells)
+        return " ".join(cells)
 
     def _render(self, lines):
         output = "\n".join(lines)
