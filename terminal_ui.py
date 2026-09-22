@@ -7,7 +7,7 @@ import time
 class TerminalUI:
     """Small, dependency-free terminal UI for Universal Downloader."""
 
-    VERSION = "4.5"
+    VERSION = "4.6"
 
     RESET = "\033[0m"
     BOLD = "\033[1m"
@@ -116,17 +116,16 @@ class TerminalUI:
 
     def _progress_bar(self, percent, width):
         """
-        Minimal iOS-style cellular-dot progress indicator.
+        Minimal signal-pip progress indicator.
 
-        Only downloaded progress is drawn. There is no predicted/empty
-        section. The leading cluster subtly pulses like old iPhone cellular
-        signal pips while the completed dots remain calm behind it.
+        Only completed progress is rendered. The last few pips form a
+        soft travelling signal wave using graduated dot sizes, inspired
+        by the restrained cellular indicators from early iOS.
         """
         width = max(6, width)
         percent = max(0.0, min(percent, 100.0))
 
-        # Because the dots are separated by spaces, use roughly half the
-        # available character width as the number of progress pips.
+        # Spaced pips read better than a solid bar in narrow terminals.
         pip_count = max(3, width // 2)
         progress = pip_count * percent / 100.0
         full = int(progress)
@@ -137,30 +136,34 @@ class TerminalUI:
         if full <= 0:
             return "·"
 
-        # Old-iPhone-like round cellular pips: nothing is drawn ahead of
-        # actual progress.
-        cells = ["●"] * min(full, pip_count)
+        # Settled progress stays quiet.
+        cells = ["•"] * min(full, pip_count)
 
-        # Animate only the front few pips. The changing dot weights make the
-        # head look like a compact caterpillar / cellular-reception pulse.
-        if 0 < percent < 100 and len(cells) >= 3:
-            tick = int(time.monotonic() * 9)
+        # The leading five pips breathe like a tiny cellular-signal wave.
+        # The pattern is intentionally subtle: no empty/future pips and
+        # no block characters.
+        if 0 < percent < 100 and len(cells) >= 2:
+            tick = int(time.monotonic() * 8)
 
             poses = (
-                ("•", "●", "●", "●"),
-                ("●", "•", "●", "●"),
-                ("●", "●", "•", "●"),
-                ("●", "●", "●", "•"),
+                ("·", "•", "●", "●", "●"),
+                ("•", "●", "●", "●", "•"),
+                ("●", "●", "●", "•", "·"),
+                ("●", "●", "•", "·", "•"),
+                ("●", "•", "·", "•", "●"),
             )
             pose = poses[tick % len(poses)]
 
             body = min(len(pose), len(cells))
             start = len(cells) - body
+            source = pose[len(pose) - body:]
 
-            for offset in range(body):
-                cells[start + offset] = pose[
-                    len(pose) - body + offset
-                ]
+            for offset, glyph in enumerate(source):
+                cells[start + offset] = glyph
+
+        # At 100%, settle into a clean row of solid pips.
+        if percent >= 100:
+            cells = ["●"] * len(cells)
 
         return " ".join(cells)
 
