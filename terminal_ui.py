@@ -1,26 +1,68 @@
 import os
+import shutil
 import sys
+import time
 
 
 class TerminalUI:
-    VERSION = "3.1"
+    """Small, dependency-free terminal UI for Universal Downloader."""
 
-    def __init__(self):
+    VERSION = "4.0"
+
+    RESET = "\033[0m"
+    BOLD = "\033[1m"
+    DIM = "\033[2m"
+    CYAN = "\033[96m"
+    MAGENTA = "\033[95m"
+    GREEN = "\033[92m"
+    RED = "\033[91m"
+
+    def __init__(self, refresh_interval=0.08):
         self.first_draw = True
+        self.refresh_interval = refresh_interval
+        self._last_draw = 0.0
+        self._spinner_index = 0
+        self._interactive = (
+            sys.stdout.isatty()
+            and os.environ.get("TERM", "") != "dumb"
+        )
+        self._color = (
+            self._interactive
+            and "NO_COLOR" not in os.environ
+        )
+
+    def _ansi(self, code, text):
+        if not self._color:
+            return text
+        return f"{code}{text}{self.RESET}"
 
     def clear(self):
-        os.system("clear")
+        if self._interactive:
+            sys.stdout.write("\033[2J\033[H")
+            sys.stdout.flush()
+        else:
+            print()
 
-    def _truncate(self, text, length=40):
+    def _terminal_width(self):
+        columns = shutil.get_terminal_size(fallback=(80, 24)).columns
+        return min(max(columns - 2, 20), 72)
+
+    def _truncate(self, text, length):
+        text = str(text)
+
         if len(text) <= length:
             return text
 
-        return text[:22] + "..." + text[-15:]
+        if length <= 8:
+            return text[: max(1, length - 1)] + "…"
+
+        left = (length - 1) // 2
+        right = length - left - 1
+        return f"{text[:left]}…{text[-right:]}"
 
     def _format_size(self, size):
         units = ["B", "KB", "MB", "GB", "TB"]
-
-        value = float(size)
+        value = max(0.0, float(size or 0))
 
         for unit in units:
             if value < 1024 or unit == units[-1]:
@@ -30,16 +72,17 @@ class TerminalUI:
             value /= 1024
 
     def _format_speed(self, speed):
-        # speed comes in MB/s
+        # speed is provided in MB/s by DirectDownloader
+        speed = max(0.0, float(speed or 0))
+
         if speed >= 1024:
             return f"{speed / 1024:.2f} GB/s"
-        elif speed >= 1:
+        if speed >= 1:
             return f"{speed:.2f} MB/s"
-        else:
-            return f"{speed * 1024:.0f} KB/s"
+        return f"{speed * 1024:.0f} KB/s"
 
     def _format_eta(self, seconds):
-        seconds = int(seconds)
+        seconds = max(0, int(seconds or 0))
 
         if seconds < 60:
             return f"00:{seconds:02d}"
@@ -57,63 +100,264 @@ class TerminalUI:
         days, hours = divmod(hours, 24)
         return f"{days}d {hours:02d}h"
 
-    def draw(self, filename, downloaded, total, speed, eta):
-        if self.first_draw:
-            self.clear()
-            self.first_draw = False
+    def _border(self, width, left="╭", fill="─", right="╮"):
+        return left + (fill * max(0, width - 2)) + right
 
-        percent = 0 if total == 0 else downloaded * 100 / total
+    def _box_line(self, text, width, align="left"):
+        inner = max(1, width - 4)
+        text = self._truncate(text, inner)
 
-        width = 38
+        if align == "center":
+            body = text.center(inner)
+        else:
+            body = text.ljust(inner)
+
+        return f"│ {body} │"
+
+    def _progress_bar(self, percent, width):
+        width = max(6, width)
+        percent = max(0.0, min(percent, 100.0))
         filled = int(width * percent / 100)
 
         if filled >= width:
-            bar = "█" * width
-        else:
-            bar = (
-                "█" * filled +
-                "▶" +
-                "─" * (width - filled - 1)
-            )
+            return "█" * width
 
-        sys.stdout.write("\033[H\033[J")
+        if filled <= 0:
+            return "▶" + ("─" * (width - 1))
 
-        print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-        print()
-        print("          Universal Downloader")
-        print("             by NPL🇳🇵ROM™")
-        print(f"                  v{self.VERSION}")
-        print()
-        print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-        print()
-
-        print(f"📦 File       : {self._truncate(filename)}")
-        print(f"📏 Size       : {self._format_size(total)}")
-        print()
-
-        print(f"{bar} {percent:6.2f}%")
-        print()
-
-        print(
-            f"⬇ Downloaded : {self._format_size(downloaded)} / "
-            f"{self._format_size(total)}"
+        return (
+            ("█" * filled)
+            + "▶"
+            + ("─" * max(0, width - filled - 1))
         )
 
-        print(f"⚡ Speed      : {self._format_speed(speed)}")
-        print(f"⏱ ETA        : {self._format_eta(eta)}")
+    def _render(self, lines):
+        output = "\n".join(lines)
 
-        print()
-        print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        if self._interactive:
+            if self.first_draw:
+                prefix = "\033[2J\033[H"
+                self.first_draw = False
+            else:
+                # Repaint in place instead of clearing the whole screen.
+                prefix = "\033[H"
 
-        sys.stdout.flush()
+            sys.stdout.write(prefix + output + "\033[J")
+            sys.stdout.flush()
+            return
+
+        print(output, flush=True)
+
+    def _brand_lines(self, width):
+        title = self._box_line("UNIVERSAL DOWNLOADER", width, "center")
+        brand = self._box_line(
+            f"NPL ROM  •  UI v{self.VERSION}",
+            width,
+            "center",
+        )
+
+        return [
+            self._ansi(self.BOLD, title),
+            self._ansi(self.MAGENTA, brand),
+        ]
+
+    def _status_panel(self, message, state="active"):
+        width = self._terminal_width()
+        spinner = ("◐", "◓", "◑", "◒")[
+            self._spinner_index % 4
+        ]
+        self._spinner_index += 1
+
+        if state == "done":
+            status = f"✓ READY  {message}"
+            status_line = self._ansi(
+                self.GREEN,
+                self._box_line(status, width),
+            )
+        elif state == "error":
+            status = f"! FAILED  {message}"
+            status_line = self._ansi(
+                self.RED,
+                self._box_line(status, width),
+            )
+        else:
+            status = f"{spinner} WORKING  {message}"
+            status_line = self._ansi(
+                self.CYAN,
+                self._box_line(status, width),
+            )
+
+        title, brand = self._brand_lines(width)
+
+        lines = [
+            self._border(width),
+            title,
+            brand,
+            self._border(width, "├", "─", "┤"),
+            status_line,
+            self._border(width, "╰", "─", "╯"),
+        ]
+
+        self._render(lines)
+
+    # Compatibility helpers used by test_ui.py and useful for URL resolution.
+    def start(self, message="Connecting…"):
+        self.first_draw = True
+        self._status_panel(message, "active")
+
+    def update(self, message):
+        self._status_panel(message, "active")
+
+    def stop(self, message="Ready!"):
+        self._status_panel(message, "done")
+
+    def draw(self, filename, downloaded, total, speed, eta):
+        now = time.monotonic()
+        complete = total > 0 and downloaded >= total
+
+        # A fast connection can call draw hundreds of times per second.
+        # ~12 FPS is visually smooth while keeping terminal overhead tiny.
+        interval = self.refresh_interval if self._interactive else 1.0
+        if (
+            not complete
+            and now - self._last_draw < interval
+        ):
+            return
+
+        self._last_draw = now
+        width = self._terminal_width()
+        inner = max(1, width - 4)
+
+        known_total = total > 0
+
+        if known_total:
+            percent = min(downloaded * 100 / total, 100.0)
+            percent_text = f"{percent:6.2f}%"
+        else:
+            percent = 0.0
+            percent_text = "  --.--%"
+
+        bar_width = max(
+            6,
+            inner - len(percent_text) - 1,
+        )
+
+        if known_total:
+            bar = self._progress_bar(percent, bar_width)
+        else:
+            spinner = ("◐", "◓", "◑", "◒")[
+                self._spinner_index % 4
+            ]
+            self._spinner_index += 1
+            bar = (
+                f"{spinner} "
+                + ("─" * max(0, bar_width - 2))
+            )
+
+        size_text = (
+            self._format_size(total)
+            if known_total
+            else "Unknown"
+        )
+        downloaded_text = self._format_size(downloaded)
+        total_text = (
+            self._format_size(total)
+            if known_total
+            else "?"
+        )
+        filename_text = self._truncate(
+            filename,
+            max(8, inner - 6),
+        )
+
+        status_text = (
+            "✓ DOWNLOAD COMPLETE"
+            if complete
+            else "● DOWNLOAD ACTIVE"
+        )
+        status_color = (
+            self.GREEN if complete else self.CYAN
+        )
+
+        title, brand = self._brand_lines(width)
+        status_line = self._ansi(
+            status_color,
+            self._box_line(status_text, width),
+        )
+
+        lines = [
+            self._border(width),
+            title,
+            brand,
+            self._border(width, "├", "─", "┤"),
+            status_line,
+            self._box_line(
+                f"File  {filename_text}",
+                width,
+            ),
+            self._box_line(
+                f"Size  {size_text}",
+                width,
+            ),
+            self._box_line("", width),
+            self._box_line(
+                f"{bar} {percent_text}",
+                width,
+            ),
+            self._box_line("", width),
+            self._box_line(
+                f"↓  {downloaded_text} / {total_text}",
+                width,
+            ),
+            self._box_line(
+                f"⚡ {self._format_speed(speed)}",
+                width,
+            ),
+            self._box_line(
+                f"⏱  {self._format_eta(eta)} remaining",
+                width,
+            ),
+            self._border(width, "├", "─", "┤"),
+            self._box_line("Ctrl+C  Cancel", width),
+            self._border(width, "╰", "─", "╯"),
+        ]
+
+        self._render(lines)
 
     def finish(self, filename):
-        print()
-        print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-        print()
-        print("✅ Download Complete")
-        print()
-        print(f"📂 Saved as : {filename}")
-        print()
-        print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        width = self._terminal_width()
+        inner = max(1, width - 4)
+        saved_as = self._truncate(
+            filename,
+            max(8, inner - 10),
+        )
 
+        title = self._ansi(
+            self.GREEN,
+            self._box_line(
+                "✓ DOWNLOAD COMPLETE",
+                width,
+                "center",
+            ),
+        )
+
+        lines = [
+            self._border(width),
+            title,
+            self._border(width, "├", "─", "┤"),
+            self._box_line(
+                f"Saved as  {saved_as}",
+                width,
+            ),
+            self._box_line(
+                "Download finished successfully.",
+                width,
+            ),
+            self._border(width, "╰", "─", "╯"),
+        ]
+
+        self._render(lines)
+
+        if self._interactive:
+            sys.stdout.write("\n")
+            sys.stdout.flush()
