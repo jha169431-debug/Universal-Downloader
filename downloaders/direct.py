@@ -681,6 +681,7 @@ class DirectDownloader:
 
         downloaded = resume_from
         transferred_this_session = 0
+        recovery_attempts = 0
 
         start_time = time.time()
         sample_time = start_time
@@ -689,67 +690,156 @@ class DirectDownloader:
 
         mode = "ab" if resume_from else "wb"
 
-        try:
-            with open(partpath, mode) as f:
-                for chunk in response.iter_content(
-                    self.chunk_size
-                ):
-                    if not chunk:
-                        continue
+        with open(partpath, mode) as f:
+            while True:
+                stream_error = None
 
-                    f.write(chunk)
-                    downloaded += len(chunk)
-                    transferred_this_session += len(chunk)
-
-                    now = time.time()
-                    sample_elapsed = max(
-                        now - sample_time,
-                        0.001,
-                    )
-                    sample_delta = downloaded - sample_bytes
-                    instant_speed = (
-                        sample_delta / sample_elapsed
-                    )
-
-                    if smoothed_speed is None:
-                        smoothed_speed = instant_speed
-                    else:
-                        alpha = 0.18
-                        smoothed_speed = (
-                            alpha * instant_speed
-                            + (1 - alpha) * smoothed_speed
-                        )
-
-                    sample_time = now
-                    sample_bytes = downloaded
-
-                    if (
-                        smoothed_speed > 0
-                        and total > 0
+                try:
+                    for chunk in response.iter_content(
+                        self.chunk_size
                     ):
-                        eta = int(
-                            (total - downloaded)
-                            / smoothed_speed
-                        )
-                    else:
-                        eta = 0
+                        if not chunk:
+                            continue
 
-                    self.ui.draw(
-                        filename,
-                        downloaded,
-                        total,
-                        smoothed_speed / 1024 / 1024,
-                        eta,
-                        source=self.source_name,
-                        destination=str(download_dir),
-                        resume_from=resume_from,
+                        f.write(chunk)
+                        downloaded += len(chunk)
+                        transferred_this_session += len(chunk)
+
+                        now = time.time()
+                        sample_elapsed = max(
+                            now - sample_time,
+                            0.001,
+                        )
+                        sample_delta = (
+                            downloaded - sample_bytes
+                        )
+                        instant_speed = (
+                            sample_delta / sample_elapsed
+                        )
+
+                        if smoothed_speed is None:
+                            smoothed_speed = instant_speed
+                        else:
+                            alpha = 0.18
+                            smoothed_speed = (
+                                alpha * instant_speed
+                                + (1 - alpha)
+                                * smoothed_speed
+                            )
+
+                        sample_time = now
+                        sample_bytes = downloaded
+
+                        if (
+                            smoothed_speed > 0
+                            and total > 0
+                        ):
+                            eta = int(
+                                (total - downloaded)
+                                / smoothed_speed
+                            )
+                        else:
+                            eta = 0
+
+                        self.ui.draw(
+                            filename,
+                            downloaded,
+                            total,
+                            smoothed_speed
+                            / 1024
+                            / 1024,
+                            eta,
+                            source=self.source_name,
+                            destination=str(
+                                download_dir
+                            ),
+                            resume_from=resume_from,
+                        )
+
+                except requests.RequestException as exc:
+                    stream_error = exc
+
+                finally:
+                    response.close()
+
+                # A normal EOF is completion when the size is unknown,
+                # or when all advertised bytes have arrived.
+                if stream_error is None:
+                    if total <= 0 or downloaded >= total:
+                        break
+
+                recovery_attempts += 1
+
+                if recovery_attempts > self.MAX_RETRIES:
+                    message = (
+                        "Network recovery exhausted after "
+                        f"{self.MAX_RETRIES} attempts. "
+                        f"Partial file kept at: {partpath}"
                     )
 
-                # Flush the completed partial before the atomic rename.
+                    if stream_error is not None:
+                        raise RuntimeError(
+                            message
+                        ) from stream_error
+
+                    raise RuntimeError(message)
+
+                # Persist everything received before attempting a new
+                # connection. This also makes a sudden process exit safer.
                 f.flush()
                 os.fsync(f.fileno())
-        finally:
-            response.close()
+
+                delay = self._retry_delay(
+                    recovery_attempts
+                )
+                self.ui.update(
+                    f"Connection interrupted • recovery "
+                    f"{recovery_attempts}/"
+                    f"{self.MAX_RETRIES} in {delay:g}s…"
+                )
+                time.sleep(delay)
+
+                (
+                    response,
+                    recovered_total,
+                    file_url,
+                    referer,
+                    restart,
+                    complete,
+                ) = self._recover_download_response(
+                    url,
+                    file_url,
+                    downloaded,
+                    referer=referer,
+                )
+
+                if complete:
+                    total = recovered_total
+                    break
+
+                if restart:
+                    self.ui.update(
+                        "Range unavailable; restarting safely…"
+                    )
+                    f.seek(0)
+                    f.truncate(0)
+                    f.flush()
+                    os.fsync(f.fileno())
+
+                    downloaded = 0
+                    resume_from = 0
+
+                total = recovered_total
+
+                # Do not let the pause/reconnect interval distort the
+                # displayed speed or ETA.
+                sample_time = time.time()
+                sample_bytes = downloaded
+                smoothed_speed = None
+
+            # Flush the completed partial before the atomic rename.
+            f.flush()
+            os.fsync(f.fileno())
 
         if total > 0 and downloaded != total:
             raise RuntimeError(
