@@ -7,7 +7,7 @@ import time
 class TerminalUI:
     """Small, dependency-free terminal UI for Universal Downloader."""
 
-    VERSION = "4.6"
+    VERSION = "4.7"
 
     RESET = "\033[0m"
     BOLD = "\033[1m"
@@ -116,19 +116,19 @@ class TerminalUI:
 
     def _progress_bar(self, percent, width):
         """
-        Minimal signal-pip progress indicator.
+        Signal-caterpillar progress indicator.
 
-        Only completed progress is rendered. The last few pips form a
-        soft travelling signal wave using graduated dot sizes, inspired
-        by the restrained cellular indicators from early iOS.
+        Nothing is drawn ahead of real progress. Completed progress leaves
+        a quiet dotted trail, while a compact 7-bead head ripples through
+        three dot sizes: ·  •  ●
         """
         width = max(6, width)
         percent = max(0.0, min(percent, 100.0))
 
-        # Spaced pips read better than a solid bar in narrow terminals.
-        pip_count = max(3, width // 2)
-        progress = pip_count * percent / 100.0
-        full = int(progress)
+        # Each visible pip takes two terminal columns because of spacing.
+        pip_count = max(4, width // 2)
+        exact = pip_count * percent / 100.0
+        full = int(exact)
 
         if percent > 0 and full == 0:
             full = 1
@@ -136,24 +136,27 @@ class TerminalUI:
         if full <= 0:
             return "·"
 
-        # Settled progress stays quiet.
-        cells = ["•"] * min(full, pip_count)
+        full = min(full, pip_count)
 
-        # The leading five pips breathe like a tiny cellular-signal wave.
-        # The pattern is intentionally subtle: no empty/future pips and
-        # no block characters.
-        if 0 < percent < 100 and len(cells) >= 2:
-            tick = int(time.monotonic() * 8)
+        # Downloaded territory stays visible as a quiet trail.
+        cells = ["·"] * full
 
+        if 0 < percent < 100:
+            tick = int(time.monotonic() * 12)
+
+            # A moving "body contraction" travels through the caterpillar.
             poses = (
-                ("·", "•", "●", "●", "●"),
-                ("•", "●", "●", "●", "•"),
-                ("●", "●", "●", "•", "·"),
-                ("●", "●", "•", "·", "•"),
-                ("●", "•", "·", "•", "●"),
+                ("·", "•", "●", "●", "●", "•", "·"),
+                ("•", "●", "●", "●", "•", "·", "•"),
+                ("●", "●", "●", "•", "·", "•", "●"),
+                ("●", "●", "•", "·", "•", "●", "●"),
+                ("●", "•", "·", "•", "●", "●", "●"),
+                ("•", "·", "•", "●", "●", "●", "•"),
             )
             pose = poses[tick % len(poses)]
 
+            # Keep the animated body attached to the live front edge of the
+            # download, so it appears to crawl forward as progress grows.
             body = min(len(pose), len(cells))
             start = len(cells) - body
             source = pose[len(pose) - body:]
@@ -161,9 +164,17 @@ class TerminalUI:
             for offset, glyph in enumerate(source):
                 cells[start + offset] = glyph
 
-        # At 100%, settle into a clean row of solid pips.
-        if percent >= 100:
-            cells = ["●"] * len(cells)
+            # Fractional progress gets a tiny "nose" so movement between
+            # whole pips still feels continuous.
+            fraction = exact - int(exact)
+            if fraction >= 0.66 and len(cells) < pip_count:
+                cells.append("●")
+            elif fraction >= 0.33 and len(cells) < pip_count:
+                cells.append("•")
+
+        else:
+            # Completion snaps into a clean, confident row.
+            cells = ["●"] * full
 
         return " ".join(cells)
 
