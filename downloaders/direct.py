@@ -7,6 +7,7 @@ from urllib.parse import unquote, urljoin, urlparse
 import requests
 from bs4 import BeautifulSoup
 
+from checksum import ChecksumMismatch, hash_file
 from terminal_ui import TerminalUI
 
 
@@ -49,9 +50,11 @@ class DirectDownloader:
         self,
         chunk_size=1024 * 256,
         source_name="Direct URL",
+        checksum=None,
     ):
         self.chunk_size = chunk_size
         self.source_name = source_name
+        self.checksum = checksum
         self.ui = TerminalUI()
         self.session = requests.Session()
         self.session.headers.update(
@@ -222,6 +225,97 @@ class DirectDownloader:
             raise last_error
 
         raise RuntimeError("Request failed after retries.")
+
+    def _quarantine_path(self, path):
+        path = Path(path)
+        raw = str(path)
+
+        if raw.endswith(".part"):
+            raw = raw[:-5]
+
+        candidate = Path(f"{raw}.corrupt")
+        index = 1
+
+        while candidate.exists():
+            candidate = Path(
+                f"{raw}.corrupt.{index}"
+            )
+            index += 1
+
+        return candidate
+
+    def _verify_checksum(
+        self,
+        path,
+        *,
+        display_name=None,
+    ):
+        if self.checksum is None:
+            return None
+
+        path = Path(path)
+        spec = self.checksum
+        shown_name = (
+            display_name
+            if display_name is not None
+            else path.name
+        )
+
+        actual = hash_file(
+            path,
+            spec.algorithm,
+            progress=lambda processed, total: (
+                self.ui.checksum_progress(
+                    shown_name,
+                    processed,
+                    total,
+                    spec.label,
+                )
+            ),
+        )
+
+        if actual != spec.expected:
+            quarantined = self._quarantine_path(path)
+            os.replace(path, quarantined)
+
+            raise ChecksumMismatch(
+                spec,
+                actual,
+                path,
+                quarantined_path=quarantined,
+            )
+
+        return actual
+
+    def _finalize_part(
+        self,
+        partpath,
+        filepath,
+        *,
+        size,
+        elapsed,
+        avg_speed,
+    ):
+        actual = self._verify_checksum(
+            partpath,
+            display_name=filepath.name,
+        )
+
+        os.replace(partpath, filepath)
+
+        self.ui.finish(
+            str(filepath),
+            size=size,
+            elapsed=elapsed,
+            avg_speed=avg_speed,
+            source=self.source_name,
+            checksum_label=(
+                self.checksum.label
+                if self.checksum is not None
+                else None
+            ),
+            checksum_digest=actual,
+        )
 
     def _looks_like_file_url(self, url):
         path = urlparse(url).path.lower()
@@ -620,14 +714,12 @@ class DirectDownloader:
             self.ui.update(
                 "Partial file already complete; finalizing…"
             )
-            os.replace(partpath, filepath)
-
-            self.ui.finish(
-                str(filepath),
+            self._finalize_part(
+                partpath,
+                filepath,
                 size=resume_from,
                 elapsed=0,
                 avg_speed=0,
-                source=self.source_name,
             )
             return
 
@@ -662,13 +754,12 @@ class DirectDownloader:
             )
 
             if complete:
-                os.replace(partpath, filepath)
-                self.ui.finish(
-                    str(filepath),
+                self._finalize_part(
+                    partpath,
+                    filepath,
                     size=resume_from,
                     elapsed=0,
                     avg_speed=0,
-                    source=self.source_name,
                 )
                 return
 
@@ -848,9 +939,6 @@ class DirectDownloader:
                 f"Partial file kept at: {partpath}"
             )
 
-        # A completed file becomes visible under its final name only now.
-        os.replace(partpath, filepath)
-
         elapsed = max(time.time() - start_time, 0.001)
         avg_speed = (
             transferred_this_session
@@ -859,10 +947,12 @@ class DirectDownloader:
             / 1024
         )
 
-        self.ui.finish(
-            str(filepath),
+        # Verify before the atomic rename. A checksum mismatch is
+        # quarantined as *.corrupt and never appears as a valid file.
+        self._finalize_part(
+            partpath,
+            filepath,
             size=downloaded,
             elapsed=elapsed,
             avg_speed=avg_speed,
-            source=self.source_name,
         )

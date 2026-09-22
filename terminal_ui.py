@@ -318,6 +318,124 @@ class TerminalUI:
             "active",
         )
 
+    def checksum_progress(
+        self,
+        filename,
+        processed,
+        total,
+        algorithm,
+    ):
+        self._hide_cursor()
+
+        now = time.monotonic()
+        if now - self._last_draw < self.refresh_interval:
+            return
+
+        self._last_draw = now
+        width = self._terminal_width()
+        inner = max(1, width - 4)
+
+        percent = (
+            min(processed * 100 / total, 100.0)
+            if total > 0
+            else 0.0
+        )
+        percent_text = f"{percent:5.1f}%"
+        bar_width = max(
+            6,
+            inner - len(percent_text) - 1,
+        )
+        bar = self._progress_bar(percent, bar_width)
+
+        title, brand = self._brand_lines(width)
+        status_line = self._ansi(
+            self.CYAN,
+            self._box_line(
+                f"◆ VERIFYING {algorithm}",
+                width,
+            ),
+        )
+
+        lines = [
+            self._border(width),
+            title,
+            brand,
+            self._border(width, "├", "─", "┤"),
+            status_line,
+            self._box_line(
+                f"File  {self._truncate(filename, max(8, inner - 6))}",
+                width,
+            ),
+            self._box_line("", width),
+            self._box_line(
+                f"{bar} {percent_text}",
+                width,
+            ),
+            self._box_line("", width),
+            self._box_line(
+                f"Read  {self._format_size(processed)} / "
+                f"{self._format_size(total)}",
+                width,
+            ),
+            self._border(width, "╰", "─", "╯"),
+        ]
+
+        self._render(lines)
+
+    def checksum_failed(
+        self,
+        algorithm,
+        expected,
+        actual,
+        path=None,
+    ):
+        self.first_draw = True
+        width = self._terminal_width()
+
+        title, brand = self._brand_lines(width)
+        status_line = self._ansi(
+            self.RED,
+            self._box_line(
+                "× CHECKSUM MISMATCH",
+                width,
+            ),
+        )
+
+        lines = [
+            self._border(width),
+            title,
+            brand,
+            self._border(width, "├", "─", "┤"),
+            status_line,
+            self._box_line(
+                f"Type      {algorithm}",
+                width,
+            ),
+            self._box_line(
+                f"Expected  {expected}",
+                width,
+            ),
+            self._box_line(
+                f"Actual    {actual}",
+                width,
+            ),
+        ]
+
+        if path:
+            lines.append(
+                self._box_line(
+                    f"Kept as   {path}",
+                    width,
+                )
+            )
+
+        lines.append(
+            self._border(width, "╰", "─", "╯")
+        )
+
+        self._render(lines)
+        self._show_cursor()
+
     def error(self, message):
         self.first_draw = True
         self._status_panel(f"FAILED  {message}", "error")
@@ -486,6 +604,8 @@ class TerminalUI:
         elapsed=None,
         avg_speed=None,
         source=None,
+        checksum_label=None,
+        checksum_digest=None,
     ):
         width = self._terminal_width()
         inner = max(1, width - 4)
@@ -534,6 +654,18 @@ class TerminalUI:
                 self._box_line(
                     "  •  ".join(details),
                     width,
+                )
+            )
+
+        if checksum_label and checksum_digest:
+            lines.append(
+                self._ansi(
+                    self.GREEN,
+                    self._box_line(
+                        f"{checksum_label}  ✓  "
+                        f"{checksum_digest}",
+                        width,
+                    ),
                 )
             )
 
