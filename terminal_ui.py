@@ -7,7 +7,7 @@ import time
 class TerminalUI:
     """Small, dependency-free terminal UI for Universal Downloader."""
 
-    VERSION = "4.7"
+    VERSION = "4.8"
 
     RESET = "\033[0m"
     BOLD = "\033[1m"
@@ -116,16 +116,16 @@ class TerminalUI:
 
     def _progress_bar(self, percent, width):
         """
-        Signal-caterpillar progress indicator.
+        iOS-style signal caterpillar.
 
-        Nothing is drawn ahead of real progress. Completed progress leaves
-        a quiet dotted trail, while a compact 7-bead head ripples through
-        three dot sizes: ·  •  ●
+        Only real progress is visible. The completed path is a faint dotted
+        trail while a 9-bead head ripples at the live edge of the download.
+        No predicted/empty pips are rendered.
         """
         width = max(6, width)
         percent = max(0.0, min(percent, 100.0))
 
-        # Each visible pip takes two terminal columns because of spacing.
+        # Spaced dots use roughly two terminal columns each.
         pip_count = max(4, width // 2)
         exact = pip_count * percent / 100.0
         full = int(exact)
@@ -138,25 +138,26 @@ class TerminalUI:
 
         full = min(full, pip_count)
 
-        # Downloaded territory stays visible as a quiet trail.
+        # Quiet trail behind the moving head.
         cells = ["·"] * full
 
         if 0 < percent < 100:
-            tick = int(time.monotonic() * 12)
+            tick = int(time.monotonic() * 14)
 
-            # A moving "body contraction" travels through the caterpillar.
+            # A longer body gives a much more "crawling" motion.
+            # The peak rolls through the body while both ends taper off.
             poses = (
-                ("·", "•", "●", "●", "●", "•", "·"),
-                ("•", "●", "●", "●", "•", "·", "•"),
-                ("●", "●", "●", "•", "·", "•", "●"),
-                ("●", "●", "•", "·", "•", "●", "●"),
-                ("●", "•", "·", "•", "●", "●", "●"),
-                ("•", "·", "•", "●", "●", "●", "•"),
+                ("·", "·", "•", "●", "●", "●", "•", "·", "·"),
+                ("·", "•", "●", "●", "●", "•", "·", "·", "•"),
+                ("•", "●", "●", "●", "•", "·", "·", "•", "●"),
+                ("●", "●", "●", "•", "·", "·", "•", "●", "●"),
+                ("●", "●", "•", "·", "·", "•", "●", "●", "●"),
+                ("●", "•", "·", "·", "•", "●", "●", "●", "•"),
+                ("•", "·", "·", "•", "●", "●", "●", "•", "·"),
+                ("·", "·", "•", "●", "●", "●", "•", "·", "·"),
             )
             pose = poses[tick % len(poses)]
 
-            # Keep the animated body attached to the live front edge of the
-            # download, so it appears to crawl forward as progress grows.
             body = min(len(pose), len(cells))
             start = len(cells) - body
             source = pose[len(pose) - body:]
@@ -164,16 +165,26 @@ class TerminalUI:
             for offset, glyph in enumerate(source):
                 cells[start + offset] = glyph
 
-            # Fractional progress gets a tiny "nose" so movement between
-            # whole pips still feels continuous.
+            # Micro-step the nose according to fractional progress so the
+            # front moves continuously rather than one whole pip at a time.
             fraction = exact - int(exact)
-            if fraction >= 0.66 and len(cells) < pip_count:
-                cells.append("●")
-            elif fraction >= 0.33 and len(cells) < pip_count:
-                cells.append("•")
+            if len(cells) < pip_count:
+                if fraction >= 0.78:
+                    cells.append("●")
+                elif fraction >= 0.52:
+                    cells.append("•")
+                elif fraction >= 0.26:
+                    cells.append("·")
+
+            # Tiny breathing head: every few frames, make the final live pip
+            # pulse once. This reads like the old iPhone signal pips waking up.
+            if cells and (tick % 6 in (1, 2)):
+                cells[-1] = "●"
+            elif cells and tick % 6 in (3, 4):
+                cells[-1] = "•"
 
         else:
-            # Completion snaps into a clean, confident row.
+            # Completion resolves into a strong, stable row.
             cells = ["●"] * full
 
         return " ".join(cells)
