@@ -6,13 +6,13 @@ class MediaFire:
     MediaFire adapter.
 
     MediaFire share links are HTML landing pages. The generic
-    DirectDownloader already knows how to resolve download landing pages
-    to the real file URL, so keep MediaFire routing thin instead of
-    depending on one brittle HTML element such as #downloadButton.
+    DirectDownloader resolves the landing page to the real file URL.
     """
 
     def __init__(self):
-        self.downloader = DirectDownloader()
+        self.downloader = DirectDownloader(
+            source_name="MediaFire"
+        )
 
     def download(self, url):
         self.downloader.download(url)
