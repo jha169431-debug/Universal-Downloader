@@ -13,6 +13,7 @@ Universal Downloader supports downloading files from multiple services through a
 - ✅ MediaFire Support
 - ✅ Samsung Quick Share Support
 - ✅ GitHub Releases Support
+- ✅ PixelDrain File + List Support
 - ✅ Live Progress Bar
 - ✅ Human-readable Download Speed
 - ✅ Human-readable ETA
@@ -39,6 +40,7 @@ UniversalDownloader/
     ├── gdrive.py
     ├── github.py
     ├── mediafire.py
+    ├── pixeldrain.py
     └── quickshare.py
 ```
 
@@ -74,6 +76,20 @@ Paste a repository, release page, tagged release, or direct release asset URL. R
 
 Public repositories work without authentication. If GitHub API rate limits are reached, set `GITHUB_TOKEN` or `GH_TOKEN` before launching the downloader.
 
+### PixelDrain
+
+Paste a normal PixelDrain file link, list link, or API file link:
+
+```text
+https://pixeldrain.com/u/FILE_ID
+https://pixeldrain.com/l/LIST_ID
+https://pixeldrain.com/api/file/FILE_ID?download
+```
+
+Single files are handed to the normal resumable engine. PixelDrain lists are resolved through the public API and shown in the existing terminal picker before download. Resume and automatic network recovery are inherited from `DirectDownloader`.
+
+PixelDrain can require a browser captcha or enforce free-account transfer/concurrency limits. When the API reports one of those restrictions, Universal Downloader keeps the partial file and shows a readable error instead of treating the API response as a download.
+
 ### Preview the terminal UI
 
 The UI itself uses only Python's standard library, so the v4 preview can be tested without installing downloader dependencies:
@@ -91,7 +107,7 @@ python3 test_ui.py
 ### v0.2
 - ✅ Resume downloads
 - ✅ Better terminal UI
-- PixelDrain support
+- ✅ PixelDrain support
 - ✅ GitHub Releases support
 
 ### v0.3
