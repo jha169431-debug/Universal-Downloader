@@ -237,7 +237,7 @@ class TerminalUI:
             brand,
             self._border(width, "├", "─", "┤"),
             self._box_line(
-                "Direct • MediaFire • Google Drive • Quick Share",
+                "Direct • MediaFire • Google Drive • Quick Share • GitHub",
                 width,
                 "center",
             ),
@@ -317,6 +317,99 @@ class TerminalUI:
             f"RESUME  {self._format_size(size)} recovered",
             "active",
         )
+
+    def choose_asset(
+        self,
+        release_name,
+        tag,
+        assets,
+    ):
+        self._show_cursor()
+        self.first_draw = True
+        width = self._terminal_width()
+        inner = max(1, width - 4)
+        title, brand = self._brand_lines(width)
+
+        lines = [
+            self._border(width),
+            title,
+            brand,
+            self._border(width, "├", "─", "┤"),
+            self._ansi(
+                self.CYAN,
+                self._box_line(
+                    "GITHUB RELEASE ASSETS",
+                    width,
+                ),
+            ),
+            self._box_line(
+                f"Release  {release_name}",
+                width,
+            ),
+        ]
+
+        if tag:
+            lines.append(
+                self._box_line(
+                    f"Tag      {tag}",
+                    width,
+                )
+            )
+
+        lines.append(
+            self._border(width, "├", "─", "┤")
+        )
+
+        for index, asset in enumerate(
+            assets,
+            start=1,
+        ):
+            size = self._format_size(
+                asset.get("size", 0)
+            )
+            name_width = max(
+                8,
+                inner - len(str(index)) - len(size) - 6,
+            )
+            name = self._truncate(
+                asset.get("name", "unnamed-asset"),
+                name_width,
+            )
+
+            lines.append(
+                self._box_line(
+                    f"{index:>2}. {name}  {size}",
+                    width,
+                )
+            )
+
+        lines.append(
+            self._border(width, "╰", "─", "╯")
+        )
+
+        self._render(lines)
+
+        while True:
+            try:
+                choice = input(
+                    "\nSelect asset  ›  "
+                ).strip()
+            except EOFError as exc:
+                raise RuntimeError(
+                    "Asset selection requires an interactive terminal."
+                ) from exc
+
+            try:
+                selected = int(choice)
+            except ValueError:
+                selected = 0
+
+            if 1 <= selected <= len(assets):
+                return assets[selected - 1]
+
+            print(
+                f"Enter a number from 1 to {len(assets)}."
+            )
 
     def error(self, message):
         self.first_draw = True
