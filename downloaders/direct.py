@@ -42,7 +42,11 @@ class DirectDownloader:
         self.ui = TerminalUI()
         self.session = requests.Session()
         self.session.headers.update(
-            {"User-Agent": "Mozilla/5.0"}
+            {
+                "User-Agent": "Mozilla/5.0",
+                # Keep byte counts stable for HTTP Range resumes.
+                "Accept-Encoding": "identity",
+            }
         )
 
     def _filename(self, response, url):
@@ -270,77 +274,309 @@ class DirectDownloader:
             referer=page_url,
         )
 
-    def download(self, url):
+    def _content_range(self, response):
+        value = response.headers.get("Content-Range", "")
+
+        match = re.match(
+            r"bytes\s+(\d+)-(\d+)/(\d+|\*)",
+            value,
+            flags=re.IGNORECASE,
+        )
+
+        if not match:
+            return None, None, None
+
+        start = int(match.group(1))
+        end = int(match.group(2))
+        total = (
+            None
+            if match.group(3) == "*"
+            else int(match.group(3))
+        )
+
+        return start, end, total
+
+    def _unsatisfied_total(self, response):
+        value = response.headers.get("Content-Range", "")
+
+        match = re.match(
+            r"bytes\s+\*/(\d+)",
+            value,
+            flags=re.IGNORECASE,
+        )
+
+        return int(match.group(1)) if match else None
+
+    def _response_total(self, response, resume_from=0):
+        _, _, content_range_total = self._content_range(
+            response
+        )
+
+        if content_range_total is not None:
+            return content_range_total
+
+        content_length = int(
+            response.headers.get("Content-Length", 0)
+            or 0
+        )
+
+        if response.status_code == 206 and content_length:
+            return resume_from + content_length
+
+        return content_length
+
+    def _fresh_response(self, url):
         response = self._open_download(url)
+        total = self._response_total(response)
+        return response, total
+
+    def _resume_response(
+        self,
+        file_url,
+        resume_from,
+        referer=None,
+    ):
+        headers = {
+            "Range": f"bytes={resume_from}-",
+        }
+
+        if referer:
+            headers["Referer"] = referer
+
+        return self.session.get(
+            file_url,
+            stream=True,
+            allow_redirects=True,
+            headers=headers,
+            timeout=30,
+        )
+
+    def download(self, url):
+        response, total = self._fresh_response(url)
 
         filename = self._filename(response, url)
         download_dir = self._download_dir()
         filepath = download_dir / filename
+        partpath = Path(f"{filepath}.part")
 
-        total = int(
-            response.headers.get(
-                "Content-Length",
-                0,
+        if filepath.exists():
+            response.close()
+            raise FileExistsError(
+                f"File already exists: {filepath}"
             )
-            or 0
+
+        resume_from = (
+            partpath.stat().st_size
+            if partpath.exists()
+            else 0
         )
-        downloaded = 0
+
+        # If an old .part is already exactly complete, finalize it without
+        # transferring the same file again.
+        if total > 0 and resume_from == total:
+            response.close()
+            self.ui.update(
+                "Partial file already complete; finalizing…"
+            )
+            os.replace(partpath, filepath)
+
+            self.ui.finish(
+                str(filepath),
+                size=resume_from,
+                elapsed=0,
+                avg_speed=0,
+                source=self.source_name,
+            )
+            return
+
+        # A partial file larger than the remote object cannot be resumed
+        # safely. Keep the final name protected and restart the .part file.
+        if total > 0 and resume_from > total:
+            self.ui.update(
+                "Partial file is invalid; restarting…"
+            )
+            partpath.unlink(missing_ok=True)
+            resume_from = 0
+
+        if resume_from > 0:
+            file_url = response.url or url
+            referer = response.request.headers.get("Referer")
+            response.close()
+
+            self.ui.resume_found(resume_from)
+
+            range_response = self._resume_response(
+                file_url,
+                resume_from,
+                referer=referer,
+            )
+
+            if range_response.status_code == 416:
+                remote_total = self._unsatisfied_total(
+                    range_response
+                )
+                range_response.close()
+
+                if (
+                    remote_total is not None
+                    and resume_from == remote_total
+                ):
+                    os.replace(partpath, filepath)
+                    self.ui.finish(
+                        str(filepath),
+                        size=resume_from,
+                        elapsed=0,
+                        avg_speed=0,
+                        source=self.source_name,
+                    )
+                    return
+
+                self.ui.update(
+                    "Resume rejected; restarting safely…"
+                )
+                partpath.unlink(missing_ok=True)
+                resume_from = 0
+                response, total = self._fresh_response(url)
+
+            elif range_response.status_code == 206:
+                start, _, remote_total = self._content_range(
+                    range_response
+                )
+
+                if start != resume_from:
+                    range_response.close()
+                    self.ui.update(
+                        "Resume range mismatch; restarting safely…"
+                    )
+                    partpath.unlink(missing_ok=True)
+                    resume_from = 0
+                    response, total = self._fresh_response(url)
+                else:
+                    response = range_response
+                    total = (
+                        remote_total
+                        if remote_total is not None
+                        else self._response_total(
+                            response,
+                            resume_from=resume_from,
+                        )
+                    )
+
+            elif range_response.status_code == 200:
+                # The server ignored Range. Reuse the full 200 response,
+                # but never append it to the partial file.
+                content_type = range_response.headers.get(
+                    "Content-Type",
+                    "",
+                ).lower()
+
+                if "text/html" in content_type:
+                    range_response.close()
+                    response, total = self._fresh_response(url)
+                else:
+                    response = range_response
+                    total = self._response_total(response)
+
+                self.ui.update(
+                    "Server does not support resume; restarting…"
+                )
+                partpath.unlink(missing_ok=True)
+                resume_from = 0
+
+            else:
+                try:
+                    range_response.raise_for_status()
+                finally:
+                    range_response.close()
+
+        downloaded = resume_from
+        transferred_this_session = 0
 
         start_time = time.time()
         sample_time = start_time
-        sample_bytes = 0
+        sample_bytes = downloaded
         smoothed_speed = None
 
-        with open(filepath, "wb") as f:
-            for chunk in response.iter_content(
-                self.chunk_size
-            ):
-                if not chunk:
-                    continue
+        mode = "ab" if resume_from else "wb"
 
-                f.write(chunk)
-                downloaded += len(chunk)
+        try:
+            with open(partpath, mode) as f:
+                for chunk in response.iter_content(
+                    self.chunk_size
+                ):
+                    if not chunk:
+                        continue
 
-                now = time.time()
-                sample_elapsed = max(now - sample_time, 0.001)
-                sample_delta = downloaded - sample_bytes
-                instant_speed = sample_delta / sample_elapsed
+                    f.write(chunk)
+                    downloaded += len(chunk)
+                    transferred_this_session += len(chunk)
 
-                if smoothed_speed is None:
-                    smoothed_speed = instant_speed
-                else:
-                    # Calm speed/ETA readout without making it feel laggy.
-                    alpha = 0.18
-                    smoothed_speed = (
-                        alpha * instant_speed
-                        + (1 - alpha) * smoothed_speed
+                    now = time.time()
+                    sample_elapsed = max(
+                        now - sample_time,
+                        0.001,
+                    )
+                    sample_delta = downloaded - sample_bytes
+                    instant_speed = (
+                        sample_delta / sample_elapsed
                     )
 
-                sample_time = now
-                sample_bytes = downloaded
+                    if smoothed_speed is None:
+                        smoothed_speed = instant_speed
+                    else:
+                        alpha = 0.18
+                        smoothed_speed = (
+                            alpha * instant_speed
+                            + (1 - alpha) * smoothed_speed
+                        )
 
-                if smoothed_speed > 0 and total > 0:
-                    eta = int(
-                        (total - downloaded) / smoothed_speed
+                    sample_time = now
+                    sample_bytes = downloaded
+
+                    if (
+                        smoothed_speed > 0
+                        and total > 0
+                    ):
+                        eta = int(
+                            (total - downloaded)
+                            / smoothed_speed
+                        )
+                    else:
+                        eta = 0
+
+                    self.ui.draw(
+                        filename,
+                        downloaded,
+                        total,
+                        smoothed_speed / 1024 / 1024,
+                        eta,
+                        source=self.source_name,
+                        destination=str(download_dir),
+                        resume_from=resume_from,
                     )
-                else:
-                    eta = 0
 
-                self.ui.draw(
-                    filename,
-                    downloaded,
-                    total,
-                    smoothed_speed / 1024 / 1024,
-                    eta,
-                    source=self.source_name,
-                    destination=str(download_dir),
-                )
+                # Flush the completed partial before the atomic rename.
+                f.flush()
+                os.fsync(f.fileno())
+        finally:
+            response.close()
 
-        response.close()
+        if total > 0 and downloaded != total:
+            raise RuntimeError(
+                "Download ended before the expected file size "
+                f"was reached ({downloaded}/{total} bytes). "
+                f"Partial file kept at: {partpath}"
+            )
+
+        # A completed file becomes visible under its final name only now.
+        os.replace(partpath, filepath)
 
         elapsed = max(time.time() - start_time, 0.001)
         avg_speed = (
-            downloaded / elapsed / 1024 / 1024
+            transferred_this_session
+            / elapsed
+            / 1024
+            / 1024
         )
 
         self.ui.finish(
