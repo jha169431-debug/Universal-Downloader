@@ -37,19 +37,22 @@ def main():
 
         if not url:
             ui.error("No URL entered")
-            return
+            return 1
 
         source_name, downloader_cls = detect_source(url)
         ui.source_found(source_name)
 
         downloader_cls().download(url)
+        return 0
 
     except KeyboardInterrupt:
         ui.cancelled()
+        return 130
 
     except Exception as exc:
         ui.error(str(exc))
+        return 1
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
