@@ -56,6 +56,22 @@ class GitHubRelease:
                 "asset_url": url,
             }
 
+        # GitHub also supports a stable latest-release asset form:
+        # /owner/repo/releases/latest/download/<filename>
+        if (
+            len(raw_parts) >= 6
+            and raw_parts[2] == "releases"
+            and raw_parts[3] == "latest"
+            and raw_parts[4] == "download"
+        ):
+            return {
+                "owner": owner,
+                "repo": repo,
+                "kind": "asset",
+                "tag": "latest",
+                "asset_url": url,
+            }
+
         # Tagged release:
         # /owner/repo/releases/tag/<tag>
         if (
@@ -137,14 +153,17 @@ class GitHubRelease:
                 )
 
             if response.status_code == 404:
-                target = (
-                    f"tag {tag}"
-                    if tag is not None
-                    else "a latest release"
-                )
-                raise RuntimeError(
-                    f"GitHub repository has no {target}."
-                )
+                if tag is not None:
+                    message = (
+                        f"GitHub release tag not found: {tag}"
+                    )
+                else:
+                    message = (
+                        "GitHub repository has no latest "
+                        "published release."
+                    )
+
+                raise RuntimeError(message)
 
             response.raise_for_status()
             return response.json()
