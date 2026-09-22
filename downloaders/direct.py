@@ -447,6 +447,152 @@ class DirectDownloader:
             headers=headers,
         )
 
+    def _recover_download_response(
+        self,
+        original_url,
+        file_url,
+        offset,
+        referer=None,
+    ):
+        """
+        Reopen a transfer at offset.
+
+        If a signed/direct URL expired, resolve the original share URL again.
+        If the server ignores Range or returns an invalid range, return a
+        fresh full response and tell the caller to restart the .part safely.
+        """
+        response = self._resume_response(
+            file_url,
+            offset,
+            referer=referer,
+        )
+
+        if response.status_code in (401, 403, 404):
+            response.close()
+            self.ui.update("Refreshing download link…")
+
+            fresh, fresh_total = self._fresh_response(
+                original_url
+            )
+            file_url = fresh.url or original_url
+            referer = fresh.request.headers.get("Referer")
+            fresh.close()
+
+            response = self._resume_response(
+                file_url,
+                offset,
+                referer=referer,
+            )
+
+        if response.status_code == 206:
+            start, _, remote_total = self._content_range(
+                response
+            )
+
+            if start != offset:
+                response.close()
+                self.ui.update(
+                    "Range mismatch; restarting safely…"
+                )
+                fresh, fresh_total = self._fresh_response(
+                    original_url
+                )
+                return (
+                    fresh,
+                    fresh_total,
+                    fresh.url or original_url,
+                    fresh.request.headers.get("Referer"),
+                    True,
+                    False,
+                )
+
+            total = (
+                remote_total
+                if remote_total is not None
+                else self._response_total(
+                    response,
+                    resume_from=offset,
+                )
+            )
+            return (
+                response,
+                total,
+                response.url or file_url,
+                response.request.headers.get("Referer")
+                or referer,
+                False,
+                False,
+            )
+
+        if response.status_code == 416:
+            remote_total = self._unsatisfied_total(response)
+            response.close()
+
+            if (
+                remote_total is not None
+                and offset == remote_total
+            ):
+                return (
+                    None,
+                    remote_total,
+                    file_url,
+                    referer,
+                    False,
+                    True,
+                )
+
+            self.ui.update(
+                "Resume rejected; restarting safely…"
+            )
+            fresh, fresh_total = self._fresh_response(
+                original_url
+            )
+            return (
+                fresh,
+                fresh_total,
+                fresh.url or original_url,
+                fresh.request.headers.get("Referer"),
+                True,
+                False,
+            )
+
+        if response.status_code == 200:
+            content_type = response.headers.get(
+                "Content-Type",
+                "",
+            ).lower()
+
+            if "text/html" in content_type:
+                response.close()
+                fresh, fresh_total = self._fresh_response(
+                    original_url
+                )
+                response = fresh
+                total = fresh_total
+            else:
+                total = self._response_total(response)
+
+            return (
+                response,
+                total,
+                response.url or file_url,
+                response.request.headers.get("Referer")
+                or referer,
+                True,
+                False,
+            )
+
+        try:
+            response.raise_for_status()
+        except Exception:
+            response.close()
+            raise
+
+        raise RuntimeError(
+            f"Unexpected resume response: "
+            f"HTTP {response.status_code}"
+        )
+
     def download(self, url):
         response, total = self._fresh_response(url)
 
@@ -494,96 +640,44 @@ class DirectDownloader:
             partpath.unlink(missing_ok=True)
             resume_from = 0
 
-        if resume_from > 0:
-            file_url = response.url or url
-            referer = response.request.headers.get("Referer")
-            response.close()
+        file_url = response.url or url
+        referer = response.request.headers.get("Referer")
 
+        if resume_from > 0:
+            response.close()
             self.ui.resume_found(resume_from)
 
-            range_response = self._resume_response(
+            (
+                response,
+                total,
+                file_url,
+                referer,
+                restart,
+                complete,
+            ) = self._recover_download_response(
+                url,
                 file_url,
                 resume_from,
                 referer=referer,
             )
 
-            if range_response.status_code == 416:
-                remote_total = self._unsatisfied_total(
-                    range_response
+            if complete:
+                os.replace(partpath, filepath)
+                self.ui.finish(
+                    str(filepath),
+                    size=resume_from,
+                    elapsed=0,
+                    avg_speed=0,
+                    source=self.source_name,
                 )
-                range_response.close()
+                return
 
-                if (
-                    remote_total is not None
-                    and resume_from == remote_total
-                ):
-                    os.replace(partpath, filepath)
-                    self.ui.finish(
-                        str(filepath),
-                        size=resume_from,
-                        elapsed=0,
-                        avg_speed=0,
-                        source=self.source_name,
-                    )
-                    return
-
+            if restart:
                 self.ui.update(
-                    "Resume rejected; restarting safely…"
+                    "Server cannot resume; restarting safely…"
                 )
                 partpath.unlink(missing_ok=True)
                 resume_from = 0
-                response, total = self._fresh_response(url)
-
-            elif range_response.status_code == 206:
-                start, _, remote_total = self._content_range(
-                    range_response
-                )
-
-                if start != resume_from:
-                    range_response.close()
-                    self.ui.update(
-                        "Resume range mismatch; restarting safely…"
-                    )
-                    partpath.unlink(missing_ok=True)
-                    resume_from = 0
-                    response, total = self._fresh_response(url)
-                else:
-                    response = range_response
-                    total = (
-                        remote_total
-                        if remote_total is not None
-                        else self._response_total(
-                            response,
-                            resume_from=resume_from,
-                        )
-                    )
-
-            elif range_response.status_code == 200:
-                # The server ignored Range. Reuse the full 200 response,
-                # but never append it to the partial file.
-                content_type = range_response.headers.get(
-                    "Content-Type",
-                    "",
-                ).lower()
-
-                if "text/html" in content_type:
-                    range_response.close()
-                    response, total = self._fresh_response(url)
-                else:
-                    response = range_response
-                    total = self._response_total(response)
-
-                self.ui.update(
-                    "Server does not support resume; restarting…"
-                )
-                partpath.unlink(missing_ok=True)
-                resume_from = 0
-
-            else:
-                try:
-                    range_response.raise_for_status()
-                finally:
-                    range_response.close()
 
         downloaded = resume_from
         transferred_this_session = 0
