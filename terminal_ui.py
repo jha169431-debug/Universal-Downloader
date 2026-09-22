@@ -7,7 +7,7 @@ import time
 class TerminalUI:
     """Small, dependency-free terminal UI for Universal Downloader."""
 
-    VERSION = "4.9"
+    VERSION = "5.0"
 
     RESET = "\033[0m"
     BOLD = "\033[1m"
@@ -310,6 +310,14 @@ class TerminalUI:
         self.first_draw = True
         self._status_panel(f"SOURCE  {source}", "done")
 
+    def resume_found(self, size):
+        self._hide_cursor()
+        self.first_draw = True
+        self._status_panel(
+            f"RESUME  {self._format_size(size)} recovered",
+            "active",
+        )
+
     def error(self, message):
         self.first_draw = True
         self._status_panel(f"FAILED  {message}", "error")
@@ -329,6 +337,7 @@ class TerminalUI:
         eta,
         source=None,
         destination=None,
+        resume_from=0,
     ):
         self._hide_cursor()
 
@@ -388,7 +397,11 @@ class TerminalUI:
         status_text = (
             "✓ DOWNLOAD COMPLETE"
             if complete
-            else "● DOWNLOAD ACTIVE"
+            else (
+                "↻ RESUMING DOWNLOAD"
+                if resume_from
+                else "● DOWNLOAD ACTIVE"
+            )
         )
         status_color = (
             self.GREEN if complete else self.CYAN
@@ -428,6 +441,14 @@ class TerminalUI:
             lines.append(
                 self._box_line(
                     f"Save    {destination}",
+                    width,
+                )
+            )
+
+        if resume_from:
+            lines.append(
+                self._box_line(
+                    f"Resume  {self._format_size(resume_from)} recovered",
                     width,
                 )
             )
