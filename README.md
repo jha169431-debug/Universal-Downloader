@@ -16,6 +16,9 @@ Universal Downloader supports downloading files from multiple services through a
 - ✅ Human-readable Download Speed
 - ✅ Human-readable ETA
 - ✅ Automatic Filename Detection
+- ✅ Resumable HTTP Downloads
+- ✅ Safe `.part` Files Until Completion
+- ✅ BUILD_DRIVE Auto-detection on Linux
 - ✅ Modular Architecture
 
 ---
@@ -38,14 +41,36 @@ UniversalDownloader/
 
 ## 🚀 Installation
 
+Modern Debian/Ubuntu-based distributions protect the system Python environment (PEP 668), so install Universal Downloader inside a virtual environment.
+
 ```bash
 git clone https://github.com/jha169431-debug/Universal-Downloader.git
-
 cd Universal-Downloader
 
-pip install -r requirements.txt
+python3 -m venv .venv
+source .venv/bin/activate
 
-python3 downloader.py
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+
+python downloader.py
+```
+
+If `python3 -m venv .venv` reports that venv support is missing:
+
+```bash
+sudo apt update
+sudo apt install -y python3-venv
+```
+
+### Preview the terminal UI
+
+The UI itself uses only Python's standard library, so the v4 preview can be tested without installing downloader dependencies:
+
+```bash
+git fetch origin
+git switch ui-v4-refresh
+python3 test_ui.py
 ```
 
 ---
@@ -53,8 +78,8 @@ python3 downloader.py
 ## 🛣️ Roadmap
 
 ### v0.2
-- Resume downloads
-- Better terminal UI
+- ✅ Resume downloads
+- ✅ Better terminal UI
 - PixelDrain support
 - GitHub Releases support
 
