@@ -1,4 +1,6 @@
-from downloaders.direct import DirectDownloader
+from urllib.parse import urlparse
+
+from downloaders.direct import DirectDownloader, DownloadCancelled
 from downloaders.gdrive import GoogleDrive
 from downloaders.github import GitHubRelease
 from downloaders.mediafire import MediaFire
@@ -7,16 +9,39 @@ from downloaders.quickshare import QuickShare
 from terminal_ui import TerminalUI
 
 
-def detect_source(url):
-    lowered = url.lower()
+APP_VERSION = "5.4"
 
-    if "drive.google.com" in lowered:
+
+def normalize_url(url):
+    """Trim user input and validate that it is an HTTP(S) URL."""
+    url = url.strip()
+
+    if not url:
+        raise ValueError("No URL entered")
+
+    parsed = urlparse(url)
+
+    if parsed.scheme.lower() not in {"http", "https"}:
+        raise ValueError("URL must start with http:// or https://")
+
+    if not parsed.netloc:
+        raise ValueError("Invalid URL")
+
+    return url
+
+
+def detect_source(url):
+    """Return a display name and downloader class for the supplied URL."""
+    parsed = urlparse(url)
+    host = (parsed.hostname or "").lower()
+
+    if host == "drive.google.com" or host.endswith(".drive.google.com"):
         return "Google Drive", GoogleDrive
 
-    if "mediafire.com" in lowered:
+    if host == "mediafire.com" or host.endswith(".mediafire.com"):
         return "MediaFire", MediaFire
 
-    if "quickshare.samsungcloud.com" in lowered:
+    if host == "quickshare.samsungcloud.com":
         return "Samsung Quick Share", QuickShare
 
     if GitHubRelease.supports(url):
@@ -33,17 +58,18 @@ def main():
     ui.welcome()
 
     try:
-        url = input("Paste URL  ›  ").strip()
-
-        if not url:
-            ui.error("No URL entered")
-            return 1
+        url = normalize_url(input("Paste URL  ›  "))
 
         source_name, downloader_cls = detect_source(url)
         ui.source_found(source_name)
 
-        downloader_cls().download(url)
+        downloader = downloader_cls()
+        downloader.download(url)
+
         return 0
+
+    except DownloadCancelled:
+        return 130
 
     except KeyboardInterrupt:
         ui.cancelled()

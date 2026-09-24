@@ -10,6 +10,11 @@ from bs4 import BeautifulSoup
 from terminal_ui import TerminalUI
 
 
+class DownloadCancelled(Exception):
+    # Raised after an active download has already handled Ctrl+C.
+    pass
+
+
 class DirectDownloader:
     RETRYABLE_STATUS = {
         408,
@@ -631,7 +636,7 @@ class DirectDownloader:
             f"HTTP {response.status_code}"
         )
 
-    def download(self, url):
+    def _download(self, url):
         response, total = self._fresh_response(url)
 
         filename = self._filename(response, url)
@@ -904,3 +909,13 @@ class DirectDownloader:
             avg_speed=avg_speed,
             source=self.source_name,
         )
+
+    def download(self, url):
+        try:
+            return self._download(url)
+        except KeyboardInterrupt as exc:
+            self.ui.cancelled(
+                "Download cancelled • partial file kept for resume"
+            )
+            raise DownloadCancelled from exc
+

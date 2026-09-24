@@ -7,7 +7,7 @@ import time
 class TerminalUI:
     """Small, dependency-free terminal UI for Universal Downloader."""
 
-    VERSION = "5.0"
+    VERSION = "5.4"
 
     RESET = "\033[0m"
     BOLD = "\033[1m"
@@ -16,6 +16,8 @@ class TerminalUI:
     MAGENTA = "\033[95m"
     GREEN = "\033[92m"
     RED = "\033[91m"
+    YELLOW = "\033[93m"
+    BLUE = "\033[94m"
 
     def __init__(self, refresh_interval=0.08):
         self.first_draw = True
@@ -215,7 +217,7 @@ class TerminalUI:
     def _brand_lines(self, width):
         title = self._box_line("UNIVERSAL DOWNLOADER", width, "center")
         brand = self._box_line(
-            f"NPL ROM  •  UI v{self.VERSION}",
+            f"NPL ROM  •  v{self.VERSION}",
             width,
             "center",
         )
@@ -224,6 +226,36 @@ class TerminalUI:
             self._ansi(self.BOLD, title),
             self._ansi(self.MAGENTA, brand),
         ]
+
+    def _source_icon(self, source):
+        """Small source hint used only for presentation."""
+        name = str(source or "").lower()
+
+        if "github" in name:
+            return "GH"
+        if "google" in name or "drive" in name:
+            return "GD"
+        if "mediafire" in name:
+            return "MF"
+        if "pixeldrain" in name:
+            return "PD"
+        if "quick share" in name or "quickshare" in name:
+            return "QS"
+        if "direct" in name:
+            return "DL"
+
+        return "SRC"
+
+    def _phase_label(self, phase):
+        labels = {
+            "connecting": "CONNECTING",
+            "downloading": "DOWNLOADING",
+            "resuming": "RESUMING",
+            "verifying": "VERIFYING SHA-256",
+            "complete": "DOWNLOAD COMPLETE",
+            "ready": "READY",
+        }
+        return labels.get(str(phase).lower(), str(phase).upper())
 
     def welcome(self):
         self._show_cursor()
@@ -237,12 +269,12 @@ class TerminalUI:
             brand,
             self._border(width, "├", "─", "┤"),
             self._box_line(
-                "Direct • MediaFire • GitHub • Google Drive • Quick Share",
+                "Direct • GitHub • PixelDrain • MediaFire • Drive • Quick Share",
                 width,
                 "center",
             ),
             self._box_line(
-                "Paste a link and let NPL handle the rest.",
+                "Paste a link. Source detection is automatic.",
                 width,
                 "center",
             ),
@@ -390,7 +422,8 @@ class TerminalUI:
     def source_found(self, source):
         self._hide_cursor()
         self.first_draw = True
-        self._status_panel(f"SOURCE  {source}", "done")
+        icon = self._source_icon(source)
+        self._status_panel(f"{icon}  SOURCE  {source}", "done")
 
     def resume_found(self, size):
         self._hide_cursor()
@@ -399,6 +432,18 @@ class TerminalUI:
             f"RESUME  {self._format_size(size)} recovered",
             "active",
         )
+
+    def verifying(self, algorithm="SHA-256"):
+        """Optional hook for downloaders that perform checksum validation."""
+        self._hide_cursor()
+        self.first_draw = True
+        self._status_panel(f"VERIFYING  {algorithm}", "active")
+
+    def verified(self, algorithm="SHA-256"):
+        """Optional hook for a successful checksum validation."""
+        self._hide_cursor()
+        self.first_draw = True
+        self._status_panel(f"VERIFIED  {algorithm}", "done")
 
     def _finish_status_panel(self):
         self._show_cursor()
@@ -443,7 +488,6 @@ class TerminalUI:
         self._last_draw = now
         width = self._terminal_width()
         inner = max(1, width - 4)
-
         known_total = total > 0
 
         if known_total:
@@ -453,10 +497,7 @@ class TerminalUI:
             percent = 0.0
             percent_text = "  --.-%"
 
-        bar_width = max(
-            6,
-            inner - len(percent_text) - 1,
-        )
+        bar_width = max(6, inner - len(percent_text) - 1)
 
         if known_total:
             bar = self._progress_bar(percent, bar_width)
@@ -467,40 +508,35 @@ class TerminalUI:
             self._spinner_index += 1
             bar = f"{spinner} receiving"
 
-        size_text = (
-            self._format_size(total)
-            if known_total
-            else "Unknown"
-        )
         downloaded_text = self._format_size(downloaded)
-        total_text = (
-            self._format_size(total)
-            if known_total
-            else "?"
-        )
+        total_text = self._format_size(total) if known_total else "?"
+        size_text = self._format_size(total) if known_total else "Unknown"
+
         filename_text = self._truncate(
             filename,
-            max(8, inner - 6),
+            max(8, inner - 8),
         )
 
-        status_text = (
-            "✓ DOWNLOAD COMPLETE"
-            if complete
-            else (
-                "↻ RESUMING DOWNLOAD"
-                if resume_from
-                else "● DOWNLOAD ACTIVE"
-            )
-        )
-        status_color = (
-            self.GREEN if complete else self.CYAN
-        )
+        if complete:
+            phase = "complete"
+            glyph = "✓"
+            status_color = self.GREEN
+        elif resume_from:
+            phase = "resuming"
+            glyph = "↻"
+            status_color = self.CYAN
+        else:
+            phase = "downloading"
+            glyph = "↓"
+            status_color = self.CYAN
 
-        title, brand = self._brand_lines(width)
+        status_text = f"{glyph} {self._phase_label(phase)}"
         status_line = self._ansi(
             status_color,
             self._box_line(status_text, width),
         )
+
+        title, brand = self._brand_lines(width)
 
         lines = [
             self._border(width),
@@ -511,58 +547,60 @@ class TerminalUI:
         ]
 
         if source:
+            icon = self._source_icon(source)
             lines.append(
-                self._box_line(f"Source  {source}", width)
+                self._box_line(f"Source   [{icon}] {source}", width)
             )
 
         lines.extend([
-            self._box_line(
-                f"File    {filename_text}",
-                width,
-            ),
-            self._box_line(
-                f"Size    {size_text}",
-                width,
-            ),
+            self._box_line(f"File     {filename_text}", width),
+            self._box_line(f"Size     {size_text}", width),
         ])
 
         if destination:
+            save_text = self._truncate(
+                destination,
+                max(8, inner - 9),
+            )
             lines.append(
-                self._box_line(
-                    f"Save    {destination}",
-                    width,
-                )
+                self._box_line(f"Save to  {save_text}", width)
             )
 
         if resume_from:
             lines.append(
-                self._box_line(
-                    f"Resume  {self._format_size(resume_from)} recovered",
-                    width,
+                self._ansi(
+                    self.YELLOW,
+                    self._box_line(
+                        f"Resume   {self._format_size(resume_from)} recovered",
+                        width,
+                    ),
                 )
             )
 
         lines.extend([
-            self._box_line("", width),
+            self._border(width, "├", "─", "┤"),
             self._box_line(
                 f"{bar} {percent_text}",
                 width,
             ),
             self._box_line("", width),
             self._box_line(
-                f"↓  {downloaded_text} / {total_text}",
+                f"Data     {downloaded_text} / {total_text}",
                 width,
             ),
             self._box_line(
-                f"⚡ {self._format_speed(speed)}",
+                f"Speed    {self._format_speed(speed)}",
                 width,
             ),
             self._box_line(
-                f"⏱  {self._format_eta(eta)} remaining",
+                f"ETA      {self._format_eta(eta)}",
                 width,
             ),
             self._border(width, "├", "─", "┤"),
-            self._box_line("Ctrl+C  Cancel", width),
+            self._ansi(
+                self.DIM,
+                self._box_line("Ctrl+C  Cancel download", width),
+            ),
             self._border(width, "╰", "─", "╯"),
         ])
 
@@ -583,7 +621,9 @@ class TerminalUI:
             max(8, inner - 10),
         )
 
-        title = self._ansi(
+        brand_title, brand = self._brand_lines(width)
+
+        complete = self._ansi(
             self.GREEN,
             self._box_line(
                 "✓ DOWNLOAD COMPLETE",
@@ -594,13 +634,16 @@ class TerminalUI:
 
         lines = [
             self._border(width),
-            title,
+            brand_title,
+            brand,
             self._border(width, "├", "─", "┤"),
+            complete,
         ]
 
         if source:
+            icon = self._source_icon(source)
             lines.append(
-                self._box_line(f"Source    {source}", width)
+                self._box_line(f"Source    [{icon}] {source}", width)
             )
 
         lines.append(
@@ -610,26 +653,37 @@ class TerminalUI:
             )
         )
 
-        details = []
-        if size is not None:
-            details.append(self._format_size(size))
-        if elapsed is not None:
-            details.append(self._format_eta(elapsed))
-        if avg_speed is not None:
-            details.append(self._format_speed(avg_speed))
+        lines.append(self._border(width, "├", "─", "┤"))
 
-        if details:
+        if size is not None:
             lines.append(
                 self._box_line(
-                    "  •  ".join(details),
+                    f"Size      {self._format_size(size)}",
+                    width,
+                )
+            )
+
+        if elapsed is not None:
+            lines.append(
+                self._box_line(
+                    f"Time      {self._format_eta(elapsed)}",
+                    width,
+                )
+            )
+
+        if avg_speed is not None:
+            lines.append(
+                self._box_line(
+                    f"Average   {self._format_speed(avg_speed)}",
                     width,
                 )
             )
 
         lines.extend([
-            self._box_line(
-                "Download finished successfully.",
-                width,
+            self._border(width, "├", "─", "┤"),
+            self._ansi(
+                self.GREEN,
+                self._box_line("Ready for the next one.", width, "center"),
             ),
             self._border(width, "╰", "─", "╯"),
         ])
